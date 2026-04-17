@@ -2,10 +2,15 @@ Menu="IPMI:1"
 Title="Settings"
 Icon="heartbeat"
 Tag="cog"
+Markdown="false"
 ---
 <?php require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_settings.php';?>
-
-<?php $version_check=version_compare(parse_ini_file('/etc/unraid-version')['version'],'7.1.99', '>') ;?>
+<?php
+$version_check = version_compare(parse_ini_file('/etc/unraid-version')['version'], '7.1.99', '>');
+$footer_enabled_count = count(array_filter($disp_sensors));
+$network_enabled = ($netsvc === 'enable');
+$override_enabled = ($override === 'enable');
+?>
 
 <link type="text/css" rel="stylesheet" href="<?=autov('/webGui/styles/jquery.switchbutton.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/ipmi.css');?>">
@@ -14,253 +19,322 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
 </script>
 <script src="<?=autov('/plugins/ipmi/js/ipmi-api.js');?>"></script>
 
-<div id="title" style="margin-top: -22px;">
-    <span class="left"><i class="icon fa fa-cog"></i> IPMI Settings</span>
-    <span class="status" style="margin-top: 50px;margin-left: -200px;">
-    <img id="board-img" src=""></span>
+<div class="ipmi-shell">
+    <section class="ipmi-page-hero">
+        <div class="ipmi-page-hero__main">
+            <div class="ipmi-page-hero__eyebrow">Platform Management</div>
+            <h1>IPMI Settings</h1>
+            <p>Configure how the plugin connects to your BMC, how events are collected, and how readings are surfaced through the dashboard, tools, and footer.</p>
+        </div>
+        <aside class="ipmi-page-hero__aside">
+            <div class="ipmi-hero-stat">
+                <div class="ipmi-hero-stat__label">Detected Board</div>
+                <div class="ipmi-hero-stat__value"><?=$board." ".$board_model." ".$sm_gen?></div>
+            </div>
+            <div class="ipmi-hero-stat">
+                <div class="ipmi-hero-stat__label">Event Notifications</div>
+                <div class="ipmi-hero-stat__value"><?=$seld_status;?></div>
+            </div>
+            <div class="ipmi-hero-stat">
+                <div class="ipmi-hero-stat__label">Fan Control</div>
+                <div class="ipmi-hero-stat__value"><?=$fanctrl_status;?></div>
+            </div>
+        </aside>
+    </section>
+
+    <div class="ipmi-summary-grid">
+        <section class="ipmi-summary-card">
+            <h4>Connection Mode</h4>
+            <p>Network polling can be turned on for remote BMCs, while localhost mode keeps local hardware visible alongside remote systems.</p>
+            <strong><?=($network_enabled ? 'Network Enabled' : 'Local Only');?></strong>
+            <p><?=($local === 'enable' ? 'Localhost is included in the monitored hosts.' : 'Localhost is not added as a separate monitored host.');?></p>
+        </section>
+        <section class="ipmi-summary-card">
+            <h4>Board Override</h4>
+            <p>Virtualized or lab environments can pin the plugin to a specific board family and model behavior.</p>
+            <strong><?=($override_enabled ? 'Enabled' : 'Disabled');?></strong>
+            <p><?=($override_enabled ? 'Manual board profile selection is active.' : 'Live DMI detection is active.');?></p>
+        </section>
+        <section class="ipmi-summary-card">
+            <h4>Display Surfaces</h4>
+            <p>Dashboard and footer visibility are now surfaced up front, which makes it easier to understand where readings will appear.</p>
+            <strong><?=($dash === 'enable' ? 'Dashboard On' : 'Dashboard Off');?></strong>
+            <p><?=$footer_enabled_count;?> / <?=$footer_sensor_slots;?> footer slot<?=($footer_sensor_slots == 1 ? '' : 's');?> assigned</p>
+        </section>
+        <section class="ipmi-summary-card">
+            <h4>Schema Versions</h4>
+            <p>Modernized config loading uses normalized schemas to keep upgrades safer.</p>
+            <strong>ipmi.cfg v<?=$cfg_schema_version;?></strong>
+            <p>fan.cfg v<?=$fan_schema_version;?><?=($board_status ? ', board profile '.htmlspecialchars($board_profile_label) : '');?></p>
+        </section>
+    </div>
+
+    <section class="ipmi-section-card">
+        <div class="ipmi-card-header">
+            <div>
+                <h3>Connection and Board Detection</h3>
+                <p class="ipmi-card-subcopy">Choose whether the plugin talks to remote BMCs, keep localhost in the pool when needed, and optionally force a board profile for virtualized environments.</p>
+            </div>
+        </div>
+
+        <form id="settings-ipmi" name="ipmi_settings" method="POST" action="/update.php" target="progressFrame">
+            <input type="hidden" name="#file" value="ipmi/ipmi.cfg" />
+
+            <div class="ipmi-form-grid ipmi-form-grid--three">
+                <div class="ipmi-field">
+                    <label class="ipmi-field__label" for="detected-board">Motherboard and Model</label>
+                    <div class="ipmi-field__value" id="detected-board"><?=$board." ".$board_model." ".$sm_gen?></div>
+                </div>
+                <div class="ipmi-field">
+                    <label class="ipmi-field__label" for="NETWORK">Enable Network Connection(s)</label>
+                    <select id="NETWORK" class="ipmi-run" name="NETWORK" size="1" title="Enable connection to network based IPMI">
+                        <?=mk_option($netsvc, 'disable', 'No');?>
+                        <?=mk_option($netsvc, 'enable', 'Yes');?>
+                    </select>
+                    <div class="ipmi-field__help">Turn this on when you want to monitor one or more remote BMCs over the network.</div>
+                </div>
+                <div class="ipmi-field ipmi-lan">
+                    <label class="ipmi-field__label" for="IPMILAN">IPMI LAN Version</label>
+                    <select id="IPMILAN" class="ipmi-run ipmi-lan" name="IPMILAN" size="1" title="Set IPMI LAN version">
+                        <?=mk_option($ipmilan, 'LAN', '1.5');?>
+                        <?=mk_option($ipmilan, 'LAN_2_0', '2.0');?>
+                    </select>
+                    <div class="ipmi-field__help ipmi-lan">Select the network transport version expected by the BMC. ASRock hardware may require 2.0.</div>
+                </div>
+
+                <div class="ipmi-field ipmi-lan">
+                    <label class="ipmi-field__label" for="LOCAL">Enable Localhost Connection</label>
+                    <select id="LOCAL" class="ipmi-run ipmi-lan" name="LOCAL" size="1" title="Enable localhost connection along with network connections">
+                        <?=mk_option($local, 'disable', 'No');?>
+                        <?=mk_option($local, 'enable', 'Yes');?>
+                    </select>
+                    <div class="ipmi-field__help ipmi-lan">Use this when you want the local BMC plus one or more remote BMCs in the same sensor and event views.</div>
+                </div>
+                <div class="ipmi-field ipmi-field--full ipmi-lan">
+                    <label class="ipmi-field__label" for="IPADDR">IP Address(es)</label>
+                    <input id="IPADDR" type="text" class="ipmi-run ipmi-lan ipmi-ipaddr" name="IPADDR" maxlength="66" value="<?=htmlspecialchars($ipaddr);?>" title="IPMI IP address">
+                    <div class="ipmi-field__help">Add up to four IPMI targets, comma-separated. Current status: <?=$conn;?></div>
+                </div>
+                <div class="ipmi-field ipmi-lan">
+                    <label class="ipmi-field__label" for="USER">User Name</label>
+                    <input id="USER" type="text" class="ipmi-run ipmi-lan ipmi-user" name="USER" maxlength="40" value="<?=htmlspecialchars($user);?>" title="Username for network access IPMI">
+                    <div class="ipmi-field__help">Username used for remote IPMI connections.</div>
+                </div>
+                <div class="ipmi-field ipmi-lan">
+                    <label class="ipmi-field__label" for="PASSWORD">Password</label>
+                    <input id="PASSWORD" type="password" class="ipmi-run ipmi-lan ipmi-password" name="PASSWORD" maxlength="40" value="<?=htmlspecialchars($password);?>" title="Password for network access IPMI">
+                    <div class="ipmi-field__help">Password used for remote IPMI connections.</div>
+                </div>
+            </div>
+
+            <div class="ipmi-alert ipmi-alert--info">
+                <p>Notification and fan-control services should be stopped before changing connection parameters so those daemons do not continue using stale credentials or host lists.</p>
+            </div>
+
+            <div class="ipmi-card-header" style="margin-top:24px;">
+                <div>
+                    <h4>Virtual Machine Override</h4>
+                    <p class="ipmi-card-subcopy">Force a specific board family and model when the plugin runs in a VM or lab environment where DMI information is not representative.</p>
+                </div>
+            </div>
+
+            <div class="ipmi-form-grid ipmi-form-grid--three">
+                <div class="ipmi-field ipmi-lan">
+                    <label class="ipmi-field__label" for="OVERRIDE">Enable Override</label>
+                    <select id="OVERRIDE" class="ipmi-run ipmi-lan" name="OVERRIDE" size="1" title="Enable motherboard override for virtual machines">
+                        <?=mk_option($override, 'disable', 'No');?>
+                        <?=mk_option($override, 'enable', 'Yes');?>
+                    </select>
+                    <div class="ipmi-field__help">Only enable this when live board detection cannot be trusted.</div>
+                </div>
+                <div class="ipmi-field ipmi-lan ipmi-override">
+                    <label class="ipmi-field__label" for="OBOARD">Motherboard</label>
+                    <select id="OBOARD" class="ipmi-run ipmi-lan ipmi-override" name="OBOARD" size="1" title="Select motherboard">
+                        <?=mk_option($oboard, 'ASRock', 'ASRock');?>
+                        <?=mk_option($oboard, 'ASRockRack', 'ASRockRack');?>
+                        <?=mk_option($oboard, 'Supermicro', 'Supermicro');?>
+                        <?=mk_option($oboard, 'Dell', 'Dell');?>
+                    </select>
+                    <div class="ipmi-field__help ipmi-override">Pick the board family whose command behavior should be used.</div>
+                </div>
+                <div class="ipmi-field ipmi-lan ipmi-override ipmi-count">
+                    <label class="ipmi-field__label" for="OCOUNT">Motherboard CPU sockets</label>
+                    <select id="OCOUNT" class="ipmi-run ipmi-lan ipmi-override ipmi-count" name="OCOUNT" size="1" title="Select number of ASRock physical CPU sockets">
+                        <?=mk_option($ocount, '0', 'Single');?>
+                        <?=mk_option($ocount, '1', 'Multiple');?>
+                    </select>
+                    <div class="ipmi-field__help ipmi-count">Only used for ASRock-family multi-socket command layouts.</div>
+                </div>
+                <div class="ipmi-field ipmi-lan ipmi-override ipmi-model">
+                    <label class="ipmi-field__label" for="OMODEL">Motherboard Model</label>
+                    <select id="OMODEL" class="ipmi-run ipmi-lan ipmi-override ipmi-model" name="OMODEL" size="1" title="Select Supermicro Model">
+                        <?=mk_option($omodel, '9', 'X9');?>
+                        <?=mk_option($omodel, '10', 'X10');?>
+                        <?=mk_option($omodel, '11', 'X11');?>
+                        <?=mk_option($omodel, '12', 'X12');?>
+                        <?=mk_option($omodel, ' ', 'Any');?>
+                    </select>
+                    <div class="ipmi-field__help ipmi-model">Only used when the selected family requires a model generation hint.</div>
+                </div>
+            </div>
+
+            <div class="ipmi-actions">
+                <input class="ipmi-run" type="button" id="ipmi-default" value="Default">
+                <input type="button" value="Reset BMC" id="bmc-reset" title="Do a cold reset of the BMC">
+                <input id="btnApply" type="submit" value="Apply">
+                <input type="button" value="Done" onClick="done()">
+            </div>
+        </form>
+    </section>
+
+    <div class="ipmi-section-grid">
+        <section class="ipmi-section-card">
+            <div class="ipmi-card-header">
+                <div>
+                    <h3>Event Notifications</h3>
+                    <p class="ipmi-card-subcopy">Send IPMI events into the Unraid notification pipeline and keep the system log synchronized with the SEL.</p>
+                </div>
+                <span class="ipmi-status-badge <?=($seld_run ? 'success' : 'warning');?>"><?=($seld_run ? 'Running' : 'Stopped');?></span>
+            </div>
+
+            <form id="settings-seld" name="seld_settings" method="POST" action="/update.php" target="progressFrame">
+                <input type="hidden" name="#file" value="ipmi/ipmi.cfg" />
+                <input type="hidden" id="COMMAND" name="#command" value="" />
+
+                <div class="ipmi-form-grid ipmi-form-grid--three">
+                    <div class="ipmi-field">
+                        <label class="ipmi-field__label" for="IPMISELD">Enable Event Notifications</label>
+                        <select id="IPMISELD" name="IPMISELD" size="1" title="Enable event notifications and local system logging for IPMI events">
+                            <?=mk_option($seld, "disable", "No");?>
+                            <?=mk_option($seld, "enable", "Yes");?>
+                        </select>
+                        <div class="ipmi-field__help">When enabled, new SEL entries are converted into system log and notification events.</div>
+                    </div>
+                    <div class="ipmi-field">
+                        <label class="ipmi-field__label" for="IPMIPOLL">Event Polling Time</label>
+                        <select id="IPMIPOLL" class="seld-run" name="IPMIPOLL" size="1" title="Amount of time between IPMI event log checks">
+                            <?=mk_option($seldpoll, '15', '15 sec');?>
+                            <?=mk_option($seldpoll, '30', '30 sec');?>
+                            <?=mk_option($seldpoll, '60', '1 min');?>
+                            <?=mk_option($seldpoll, '180', '3 min');?>
+                            <?=mk_option($seldpoll, '300', '5 min');?>
+                            <?=mk_option($seldpoll, '1800', '30 min');?>
+                        </select>
+                        <div class="ipmi-field__help">Defines how often the SEL is checked for new entries.</div>
+                    </div>
+                    <div class="ipmi-field">
+                        <label class="ipmi-field__label">Send Sample Event</label>
+                        <div class="ipmi-actions" style="margin-top:0;">
+                            <input id="btnTest" type="button" value="Send Test Event" title="Send a sample event to the IPMI hardware">
+                        </div>
+                        <div class="ipmi-field__help">Useful when verifying notifications after changing connection settings.</div>
+                    </div>
+                </div>
+
+                <div class="ipmi-actions">
+                    <input class="seld-run" type="button" id="seld-default" value="Default">
+                    <input class="seld-run" id="btnSELD" type="submit" value="Apply">
+                    <input type="button" value="Done" onClick="done()">
+                </div>
+            </form>
+        </section>
+
+        <section class="ipmi-section-card">
+            <div class="ipmi-card-header">
+                <div>
+                    <h3>Display Surfaces</h3>
+                    <p class="ipmi-card-subcopy">Choose which sensors are available globally, which devices feed HDD temperature, and whether the dashboard view is enabled.</p>
+                </div>
+            </div>
+
+            <form id="settings-ignore" name="ignore_settings" method="POST" action="/update.php" target="progressFrame">
+                <input type="hidden" name="#file" value="ipmi/ipmi.cfg" />
+
+                <div class="ipmi-form-grid ipmi-form-grid--three">
+                    <div class="ipmi-field">
+                        <label class="ipmi-field__label" for="select">Global Available Sensors</label>
+                        <select multiple id="select" title="Choose sensors to show in dropdown menus, readings, and the footer.">
+                            <option value="">Select All</option>
+                            <?=ipmi_get_enabled($ignore);?>
+                        </select>
+                        <input type="hidden" id="IGNORE" name="IGNORE" value="<?=htmlspecialchars($ignore);?>" />
+                        <input type="hidden" id="select-svc" value="">
+                        <div class="ipmi-field__help">Unchecked sensors are removed from sensor selectors, tools, and footer choices.</div>
+                    </div>
+
+                    <div class="ipmi-field">
+                        <label class="ipmi-field__label" for="select-dash">Dashboard Sensors</label>
+                        <select multiple id="select-dash" title="Choose IPMI sensors for the dashboard">
+                            <option value="">Select All</option>
+                            <?=ipmi_get_enabled($dignore);?>
+                        </select>
+                        <input type="hidden" id="DIGNORE" name="DIGNORE" value="<?=htmlspecialchars($dignore);?>" />
+                        <input type="hidden" id="select-dash-svc" name="DASH" value="<?=htmlspecialchars($dash);?>">
+                        <div class="ipmi-field__help">Uncheck everything to disable the dashboard tile entirely.</div>
+                    </div>
+
+                    <div class="ipmi-field">
+                        <label class="ipmi-field__label" for="select-devs">Available Hard Drives</label>
+                        <select multiple id="select-devs" title="Choose hard drives to use with HDD temperature">
+                            <option value="">Select All</option>
+                            <?=get_hdd_options($devignore);?>
+                        </select>
+                        <input type="hidden" id="DEVIGNORE" name="DEVIGNORE" value="<?=htmlspecialchars($devignore);?>" />
+                        <input type="hidden" id="select-devs-svc" name="DEVS" value="<?=htmlspecialchars($devs);?>">
+                        <div class="ipmi-field__help">These devices feed the HDD Temperature synthetic sensor used by fan control.</div>
+                    </div>
+                </div>
+
+                <div class="ipmi-actions">
+                    <input type="button" id="ignore-default" value="Default">
+                    <input type="submit" value="Apply">
+                    <input type="button" value="Done" onClick="done()">
+                </div>
+            </form>
+        </section>
+    </div>
+
+    <section class="ipmi-section-card">
+        <div class="ipmi-card-header">
+            <div>
+                <h3>Footer Display</h3>
+                <p class="ipmi-card-subcopy">Choose up to <?=$footer_sensor_slots;?> sensors to display persistently in the Unraid footer. Temperature, fan, voltage, and power readings are all supported.</p>
+            </div>
+            <span class="ipmi-status-badge info"><?=$footer_enabled_count;?> slot<?=($footer_enabled_count == 1 ? '' : 's');?> active</span>
+        </div>
+
+        <form id="settings-footer" name="footer_settings" method="POST" action="/update.php" target="progressFrame">
+            <input type="hidden" name="#file" value="ipmi/ipmi.cfg" />
+
+            <div class="ipmi-display-grid">
+                <?php for ($i = 1; $i <= $footer_sensor_slots; $i++): ?>
+                <div class="ipmi-field">
+                    <label class="ipmi-field__label" for="DISP_SENSOR<?=$i;?>">Footer Sensor #<?=$i;?></label>
+                    <select id="DISP_SENSOR<?=$i;?>" name="DISP_SENSOR<?=$i;?>" class="display">
+                        <option value=''>None</option>
+                        <?=ipmi_get_options($disp_sensors[$i]);?>
+                    </select>
+                    <div class="ipmi-field__help">Select the sensor shown in footer slot <?=$i;?>.</div>
+                </div>
+                <?php endfor; ?>
+            </div>
+
+            <div class="ipmi-actions">
+                <input type="button" id="footer-default" value="Default">
+                <input type="submit" value="Apply">
+                <input type="button" value="Done" onClick="done()">
+            </div>
+        </form>
+    </section>
 </div>
-
-<form markdown="1" id="settings-ipmi" name="ipmi_settings" method="POST" action="/update.php" target="progressFrame">
-<input type="hidden" name="#file" value="ipmi/ipmi.cfg" />
-
-Motherboard and Model:
-: <span><?=$board." ".$board_model." ".$sm_gen?></span>
-
-Enable Network Connection(s):
-: <select id="NETWORK" class="ipmi-run" name="NETWORK" size="1"  title="Enable connection to network based ipmi, not necessary for local onboard ipmi">
-  <?=mk_option($netsvc, 'disable', 'No');?>
-  <?=mk_option($netsvc, 'enable', 'Yes');?>
-  </select>
-
-> Enable monitoring of IPMI sensors and events through the network.
-> Notifications and Fan Control must be stopped to change settings
-
-<label class="ipmi-lan">Enable Localhost Connection:</label>
-: <select id="LOCAL" class="ipmi-run ipmi-lan" name="LOCAL" size="1" title="Enable localhost connection along with network connections">
-  <?=mk_option($local, 'disable', 'No');?>
-  <?=mk_option($local, 'enable', 'Yes');?>
-  </select>
-
-> Enable monitoring of localhost as well as network servers.
->
-> Useful when monitoring local server as well as a backup server or two.
-
-<label class="ipmi-lan">IP Address(es):</label>
-: <input id="IPADDR" type="text" class="ipmi-run ipmi-lan ipmi-ipaddr" name="IPADDR" maxlength="66" value="<?=htmlspecialchars($ipaddr);?>" title="IPMI IP address" placeholder="" ><label class='ipmi-lan'><?=$conn;?></label>
-
-> Add up to four different IPMI IP addresses to monitor sensors and events.
-
-<label class="ipmi-lan">User Name:</label>
-: <input id="USER" type="text" class="ipmi-run ipmi-lan ipmi-user" name="USER" maxlength="40" value="<?=htmlspecialchars($user);?>" title="username for network access IPMI" placeholder="username for network access" >
-
-> Username for IPMI connections(s).
-
-<label class="ipmi-lan">Password:</label>
-: <input id="PASSWORD" type="password" class="ipmi-run ipmi-lan ipmi-password" name="PASSWORD" maxlength="40" value="<?=htmlspecialchars($password);?>" title="password for network access IPMI" placeholder="password for network access" >
-
-> Password for IPMI connection(s).
-
-> IPMI LAN Version for IPMI connections(s).
-
-<label class="ipmi-lan">IPMI Lan Version:</label>
-: <select id="IPMILAN" class="ipmi-run ipmi-lan" name="IPMILAN" size="1"  title="Set IPMI Lan verion">
-  <?=mk_option($ipmilan, 'LAN', '1.5');?>
-  <?=mk_option($ipmilan, 'LAN_2_0', '2.0');?>
-  </select>
-
-> IPMI LAN Verison for IPMI connection(s). Default is 1.5 ASRock may require 2.0
-
-Enable Virtual Machine Override:
-: <select id="OVERRIDE" class="ipmi-run ipmi-lan" name="OVERRIDE" size="1"  title="Enable motherboard override for virtual machines">
-  <?=mk_option($override, 'disable', 'No');?>
-  <?=mk_option($override, 'enable', 'Yes');?>
-  </select>
-
-> Enable motherboard override for virtual machines
-> Selecting an incorrect model or motherboard will not work.
-> Settings and commands are specific to each manufacture and model
-
-<label class="ipmi-override">Motherboard:</label>
-: <select id="OBOARD" class="ipmi-run ipmi-lan ipmi-override" name="OBOARD" size="1"  title="Select motherboard">
-  <?=mk_option($oboard, 'ASRock', 'ASRock');?>
-  <?=mk_option($oboard, 'ASRockRack', 'ASRockRack');?>
-  <?=mk_option($oboard, 'Supermicro', 'Supermicro');?>
-  <?=mk_option($oboard, 'Dell', 'Dell');?>
-  </select>
-
-> Select either ASRock, ASRockRack, Supermicro or Dell
-> Selecting an incorrect motherboard will not work.
-> Settings and commands are specific to each manufacture
-
-<label class="ipmi-override ipmi-count">Motherboard CPU sockets:</label>
-: <select id="OCOUNT" class="ipmi-run ipmi-lan ipmi-override ipmi-count" name="OCOUNT" size="1"  title="Select number of ASRock physical CPU sockets">
-  <?=mk_option($ocount, '0', 'Single');?>
-  <?=mk_option($ocount, '1', 'Multiple');?>
-  </select>
-
-> Select the acutal number of physical CPU sockets your ASRock board has.
-> This is not the same as the virtual cores for your virtual machine.
-
-<label class="ipmi-override ipmi-model">Motherboard Model:</label>
-: <select id="OMODEL" class="ipmi-run ipmi-lan ipmi-override ipmi-model" name="OMODEL" size="1"  title="Select Supermicro Model">
-  <?=mk_option($omodel, '9', 'X9');?>
-  <?=mk_option($omodel, '10', 'X10');?>
-  <?=mk_option($omodel, '11', 'X11');?>
-  <?=mk_option($omodel, '12', 'X12');?>
-  <?=mk_option($omodel, ' ', 'Any');?>
-  </select>
-
-> Select Supermicro model series
-> Selecting an incorrect model will not work.
-> Settings and commands are specific to each model
-
-<?php if (!$version_check) : ?>
-<input class="ipmi-run" type="button" id="ipmi-default" value="Default"><input type="button" value="Reset BMC" id="bmc-reset" title="do a cold reset of the BMC">
-: <input id="btnApply" type="submit" value="Apply"><input type="button" value="Done" onClick="done()">
-<?php endif; ?>
-<?php if ($version_check) : ?>
-<input class="ipmi-run" type="button" id="ipmi-default" value="Default"><input type="button" value="Reset BMC" id="bmc-reset" title="do a cold reset of the BMC"><span>
-: <span><input id="btnApply" type="submit" value="Apply"><input type="button" value="Done" onClick="done()"></span>
-<?php endif; ?>
-
-</form>
-
-<div id="title" >
-    <span class="left"><i class="icon fa fa-comment"></i> Event Notification</span>
-  <dl> <span class="status" id="notify-status">Event Notification: <?=$seld_status;?> </span></dl>
-</div>
-
-<form markdown="1" id="settings-seld" name="seld_settings" method="POST" action="/update.php" target="progressFrame">
-<input type="hidden" name="#file" value="ipmi/ipmi.cfg" />
-<input type="hidden" id="COMMAND" name="#command" value="" />
-
-Enable Event Notifications:
-: <select id="IPMISELD" name="IPMISELD" size="1" title="Enable event notifications and local system logging for ipmi events">
-  <?=mk_option($seld, "disable", "No");?>
-  <?=mk_option($seld, "enable", "Yes");?>
-  </select>&nbsp;<input id="btnTest" type="button" value="Test" title="send a random sample event to your ipmi hardware">
-
-> Enable IPMI event notifications. IPMI events will be logged in the system log.
->
-> System log is monitored and notification event sent based on severity.
-
-Event Polling Time:
-: <select id="IPMIPOLL" class="seld-run" name="IPMIPOLL" size="1" title="Amount of time between ipmi event log checks">
-  <?=mk_option($seldpoll, '15', '15 sec');?>
-  <?=mk_option($seldpoll, '30', '30 sec');?>
-  <?=mk_option($seldpoll, '60', '1 min');?>
-  <?=mk_option($seldpoll, '180', '3 min');?>
-  <?=mk_option($seldpoll, '300', '5 min');?>
-  <?=mk_option($seldpoll, '1800', '30 min');?>
-  </select>
-
-> Specify how long between checking IPMI event log and adding events to system log.
-
-&nbsp;
-
-<input class="seld-run" type="button" id="seld-default" value="Default">
-: <span><input class="seld-run" id="btnSELD" type="submit" value="Apply"><input type="button" value="Done" onClick="done()"></span>
-</form>
-
-> Default button resets form.
->
-> Reset BMC button performs a cold reset of the BMC
-
-<div id="title"><span class="left"><i class="icon fa fa-desktop"></i> Display Settings</span></div>
-
-<form markdown="1" id="settings-ignore" name="ignore_settings" method="POST" action="/update.php" target="progressFrame">
-<input type="hidden" name="#file" value="ipmi/ipmi.cfg" />
-
-Global Available Sensors:
-: <select multiple id="select" title="choose sensors to show in all dropdown menus, readings page and footer.">
-    <option value="">Select All</option>
-    <?=ipmi_get_enabled($ignore);?>
-  </select>
-
-<input type="hidden" id="IGNORE" name="IGNORE" value="<?=htmlspecialchars($ignore);?>" />
-
-<input type="hidden" id="select-svc" value="">
-
-> Choose sensors to show in all dropdown menus, fan control, readings and footer.
->
-> Unchecked sensors will not be displayed.
-
-&nbsp;
-
-
-Dashboard Sensors:
-: <select multiple id="select-dash" title="choose IPMI sensors for the dashboard">
-    <option value="">Select All</option>
-    <?=ipmi_get_enabled($dignore);?>
-  </select>
-
-<input type="hidden" id="DIGNORE" name="DIGNORE" value="<?=htmlspecialchars($dignore);?>" />
-
-<input type="hidden" id="select-dash-svc" name="DASH" value="<?=htmlspecialchars($dash);?>">
-
-> Choose sensors to show in Dashboard display.
->
-> Unchecked sensors will not be displayed.
-> Unchecking all will disable the Dashboard display
-
-&nbsp;
-
-Available Hard Drives:
-: <select multiple id="select-devs" title="choose hard drives to use with HDD Temperature">
-    <option value="">Select All</option>
-    <?=get_hdd_options($devignore);?>
-  </select>
-
-<input type="hidden" id="DEVIGNORE" name="DEVIGNORE" value="<?=htmlspecialchars($devignore);?>" />
-
-<input type="hidden" id="select-devs-svc" name="DEVS" value="<?=htmlspecialchars($devs);?>">
-
-> Choose hard drives to use for HDD Temperature.
->
-> Unchecked hard drive temps will not be used.
-
-&nbsp;
-
-<input type="button" id="ignore-default" value="Default">
-: <span><input type="submit" value="Apply"><input type="button" value="Done" onClick="done()"><span>
-</form>
-
-<div id="title"><span class="left"><i class="icon fa fa-sticky-note"></i> Footer Settings</span></div>
-
-<form markdown="1" id="settings-footer" name="footer_settings" method="POST" action="/update.php" target="progressFrame">
-<input type="hidden" name="#file" value="ipmi/ipmi.cfg" />
-
-> Display Settings can be applied at any time.
-
-> Choose up to <?=$footer_sensor_slots;?> sensors to display in the footer of webGui.
-
-<?php for ($i = 1; $i <= $footer_sensor_slots; $i++): ?>
-
-Sensor #<?=$i;?>:
-: <select id="DISP_SENSOR<?=$i;?>" name="DISP_SENSOR<?=$i;?>" class="display">
-        <option value=''>None</option>
-        <?=ipmi_get_options($disp_sensors[$i]);?>
-    </select>
-
-> Sensor #<?=$i;?> to monitor and display in footer of webGui.
-
-<?php endfor; ?>
-
-&nbsp;
-
-<input type="button" id="footer-default" value="Default">
-: <span><input type="submit" value="Apply"><input type="button" value="Done" onClick="done()"><span>
-</form>
 
 <script src="<?=autov('/plugins/ipmi/js/jquery.mask.min.js');?>"></script>
 <script src="<?=autov('/webGui/javascript/jquery.switchbutton.js');?>"></script>
 
 <script>
 $(function(){
-    // append readings tab
     <?php if (!$version_check) : ?>
-    $('.tabs')
-        .append('<div class="tab"><input type="radio" name="tabs2" id="tab5"><label for="tab5"><i class="icon fa fa-heartbeat"></i>Readings</label></div>');
+    $('.tabs').append('<div class="tab"><input type="radio" name="tabs2" id="tab5"><label for="tab5"><i class="icon fa fa-heartbeat"></i>Readings</label></div>');
     <?php endif; ?>
     <?php if ($version_check) : ?>
     if ($('.tabs-container').length) {
@@ -270,9 +344,8 @@ $(function(){
     }
     <?php endif; ?>
 
-    // dynamix plugin update api
     <?php if (function_exists('plugin_update_available') && $version = plugin_update_available('ipmi')): ?>
-        showNotice('IPMI <?=htmlspecialchars($version);?> available. <a>Update</a>','ipmi');
+        showNotice('IPMI <?=htmlspecialchars($version);?> available. <a>Update</a>', 'ipmi');
         $('#user-notice a').on('click', function () {
             $('#user-notice').empty();
         });
@@ -284,15 +357,7 @@ $(function(){
         initIgnoreDropdown(true);
     });
 
-    // if png is missing, replaced with unknown.png
-   // $('#board-img')
-     //   .error(function() {
-     //       $('#board-img').attr('src', '/plugins/ipmi/images/unknown.png');
-     //   })
-     //   .attr('src', "/plugins/ipmi/images/<?=$board;?>.png");
-
     $('#bmc-reset').click(resetBMC);
-
     $('#btnTest').click(EventTest);
 
     $('#tab5').click(function() {
@@ -328,37 +393,37 @@ function initIgnoreDropdown(remove) {
         $('#select-dash').dropdownchecklist('destroy');
         $('#select-devs').dropdownchecklist('destroy');
     }
-    DDCheckList('#select','#IGNORE');
-    DDCheckList('#select-dash','#DIGNORE');
-    DDCheckList('#select-devs','#DEVIGNORE');
+    DDCheckList('#select', '#IGNORE');
+    DDCheckList('#select-dash', '#DIGNORE');
+    DDCheckList('#select-devs', '#DEVIGNORE');
 }
 
-function DDCheckList(Select,Values) {
-    $(Select).dropdownchecklist( {
+function DDCheckList(Select, Values) {
+    $(Select).dropdownchecklist({
         emptyText: 'Nothing Available',
         icon: {placement: 'right', toOpen: 'ui-icon-triangle-1-s', toClose: 'ui-icon-triangle-1-n'},
         width: 300,
         explicitClose: 'close',
         firstItemChecksAll: true,
-        textFormatFunction: function(options) { return 'Select (unchecked will be ignored)'; },
+        textFormatFunction: function() { return 'Select items'; },
         onComplete: function(selector){
             var values = '';
-            var Unchecked = 1;
-            var Size = selector.options.length;
-            for( i=1; i < Size; i++ ) {
-                if ((selector.options[i].selected == false) && (selector.options[i].value !== '')){
+            var unchecked = 1;
+            var size = selector.options.length;
+            for (var i = 1; i < size; i++) {
+                if ((selector.options[i].selected == false) && (selector.options[i].value !== '')) {
                     if (values != '')
                         values += ',';
-                values += selector.options[i].value;
-                Unchecked++;
+                    values += selector.options[i].value;
+                    unchecked++;
+                }
             }
-        }
-        $(Values).val(values);
+            $(Values).val(values);
 
-            if(Size == Unchecked)
-                $(Select+'-svc').val('disable');
+            if (size == unchecked)
+                $(Select + '-svc').val('disable');
             else
-                $(Select+'-svc').val('enable');
+                $(Select + '-svc').val('enable');
         }
     });
 }
@@ -396,14 +461,14 @@ function checkSELD() {
     if ($('#IPMISELD')[0].selectedIndex < 1 ){
         $('#COMMAND').val('/usr/local/emhttp/plugins/ipmi/scripts/seld_stop');
         $('#btnSELD').prop('disabled', false);
-    }else {
+    } else {
         $('#COMMAND').val('/usr/local/emhttp/plugins/ipmi/scripts/seld_start');
     }
 
-    if ("<?=$seld_run;?>" == true){
+    if ("<?=$seld_run;?>" == true) {
         $('.seld-run').prop('disabled', true);
         $('#btnTest').show();
-    }else{
+    } else {
         $('.seld-run').prop('disabled', false);
         $('#btnTest').hide();
     }
@@ -414,24 +479,24 @@ function decData() {
 }
 
 function checkNETWORK() {
-    if ($('#NETWORK')[0].selectedIndex < 1 )
+    if ($('#NETWORK')[0].selectedIndex < 1) {
         $('.ipmi-lan').hide();
-    else {
+    } else {
         $('.ipmi-lan').show();
         $('.ipmi-run').prop('disabled', ("<?=$seld_run || $fanctrl_run?>" == true));
     }
 }
 
 function checkOVERRIDE() {
-    if ($('#OVERRIDE')[0].selectedIndex < 1 ){
+    if ($('#OVERRIDE')[0].selectedIndex < 1) {
         $('.ipmi-override').hide();
-    }else {
+    } else {
         $('.ipmi-override').show();
 
-        if ($('#OBOARD')[0].selectedIndex < 1 ){
+        if ($('#OBOARD')[0].selectedIndex < 1) {
             $('.ipmi-model').hide();
             $('.ipmi-count').show();
-        }else{
+        } else {
             $('.ipmi-model').show();
             $('.ipmi-count').hide();
         }
@@ -439,33 +504,29 @@ function checkOVERRIDE() {
 }
 
 function checkLOCAL() {
-    if ($('#LOCAL')[0].selectedIndex < 1 )
-        $('.ipmi-ipaddr').mask('0ZZ.0ZZ.0ZZ.0ZZ,0ZZ.0ZZ.0ZZ.0ZZ,0ZZ.0ZZ.0ZZ.0ZZ,0ZZ.0ZZ.0ZZ.0ZZ', {translation:  {'Z': {pattern: /[0-9]/, optional: true}}});
+    if ($('#LOCAL')[0].selectedIndex < 1)
+        $('.ipmi-ipaddr').mask('0ZZ.0ZZ.0ZZ.0ZZ,0ZZ.0ZZ.0ZZ.0ZZ,0ZZ.0ZZ.0ZZ.0ZZ,0ZZ.0ZZ.0ZZ.0ZZ', {translation: {'Z': {pattern: /[0-9]/, optional: true}}});
     else
-        $('.ipmi-ipaddr').mask('localhost,0ZZ.0ZZ.0ZZ.0ZZ,0ZZ.0ZZ.0ZZ.0ZZ,0ZZ.0ZZ.0ZZ.0ZZ', {translation:  {'Z': {pattern: /[0-9]/, optional: true}}});
+        $('.ipmi-ipaddr').mask('localhost,0ZZ.0ZZ.0ZZ.0ZZ,0ZZ.0ZZ.0ZZ.0ZZ,0ZZ.0ZZ.0ZZ.0ZZ', {translation: {'Z': {pattern: /[0-9]/, optional: true}}});
 }
 
 function verifyDATA() {
-    $('#PASSWORD').val(btoa( $('#PASSWORD').val()));
+    $('#PASSWORD').val(btoa($('#PASSWORD').val()));
 }
 
-// send random test event
 function EventTest() {
-    ipmiPost('/plugins/ipmi/include/ipmi_event_test.php', {},
-        function(data) {
+    ipmiPost('/plugins/ipmi/include/ipmi_event_test.php', {}, function(data) {
         swal({
-            title: 'Sample Event Sent:',
+            title: 'Sample Event Sent',
             text: data.event,
             type: 'success',
             showCancelButton: false,
-            closeOnConfirm: true,
-        }, function() {
+            closeOnConfirm: true
         });
     });
 }
 
-// do a cold reset of the bmc
-function resetBMC(){
+function resetBMC() {
     swal({
         title: 'Are you sure?',
         text: 'You want to do a cold reset of the BMC!?',
@@ -473,14 +534,18 @@ function resetBMC(){
         showCancelButton: true,
         closeOnConfirm: false
     }, function() {
-        ipmiPost('/plugins/ipmi/include/bmc_reset.php', {},function(data, response) {
-            swal({title:'BMC Reset',text:response.message || 'cold reset of BMC successful',type:'success',closeOnConfirm: true},function() {
+        ipmiPost('/plugins/ipmi/include/bmc_reset.php', {}, function(data, response) {
+            swal({
+                title: 'BMC Reset',
+                text: response.message || 'Cold reset of BMC successful',
+                type: 'success',
+                closeOnConfirm: true
+            }, function() {
                 location.reload(true);
             });
         }, function(response) {
-            swal({title:'BMC Reset',text:ipmiResponseText(response),type:'error'});
+            swal({title:'BMC Reset', text:ipmiResponseText(response), type:'error'});
         });
     });
-};
-
+}
 </script>

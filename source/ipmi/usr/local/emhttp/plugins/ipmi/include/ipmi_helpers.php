@@ -315,206 +315,215 @@ function ipmi_fan_sensors($ignore=null) {
 /* get all fan options for fan control */
 function get_fanctrl_options(){
     global $fansensors, $fancfg, $board, $board_model, $board_json, $board_file_status, $board_status, $cmd_count, $range, $display_unit;
-    if($board_status) {
-        $i = 0;
-        $fan1234 = 0;
-        $sysfan = 0;
-        $cpufan = 0;
-        $board_profile = ipmi_resolve_asrock_fan_profile($board, $board_model, $board_json);
-        $seen_asrock_fans = [];
-        foreach($fansensors as $id => $fan){
-            if($i > 11) break;
-            if ($fan['Type'] === 'Fan'){
-                $raw_name = $fan['Name'];
-                $name    = htmlspecialchars($raw_name);
-                $display = $name;
-                if(($board === 'ASRock' || $board === 'ASRockRack') && !empty($board_profile)) {
-                    $canonical_name = ipmi_canonicalize_asrock_fan_name_for_profile($board_profile, $raw_name);
-                    if (array_key_exists($canonical_name, $seen_asrock_fans))
-                        continue;
+    if (!$board_status) {
+        echo '<div class="ipmi-alert ipmi-alert--danger"><p><strong>This board is not currently supported.</strong></p><p>Fan control options are only available for supported ASRock, ASRock Rack, Supermicro, and Dell profiles.</p></div>';
+        return;
+    }
 
-                    $seen_asrock_fans[$canonical_name] = true;
-                    $name = htmlspecialchars($canonical_name);
-                    $display = ($canonical_name === $raw_name) ? $name : htmlspecialchars($canonical_name.' / '.$raw_name);
-                }
-                if($board === 'Supermicro'){
-                    $syscpu = false;
-                    if(strpos ($name, 'SYS_FAN') !== false){
-                        $syscpu = true;
-                        $i++;
-                        if($sysfan == 0){
-                            $name = 'FANA';
-                            $display = 'SYS_FAN';
-                            $sysfan++;
-                        }else{
-                            continue;
-                        }
-                    }elseif(strpos ($name, 'CPU_FAN') !== false){
-                        $syscpu = true;
-                        $i++;
-                        if($cpufan == 0){
-                            $name = 'FAN1234';
-                            $display = 'CPU_FAN';
-                            $cpufan++;
-                        }else{
-                            continue;
-                        }
-                    }elseif($name !== 'FANA' && !$syscpu) {
-                        #$i++;
-                        if($fan1234 == 0){
-                            $name = 'FAN1234';
-                            $display = 'FAN1234';
-                            $fan1234++;
-                        }else{
-                            continue;
-                        }
-                    }
-                }
-                if($board ==='Dell'){
-                    $i++;
-                    if($fan1234 == 0){
-                    $name = 'FAN123456';
-                    $display = 'FAN123456';
-                    $fan1234++;}                        
-                    else{
-                        continue;}
-                }
-                $tempid  = 'TEMP_'.$name;
-                $temphdd  = 'TEMPHDD_'.$name;
-                $temp    = $fansensors[$fancfg[$tempid]];
-                $temphddd    = $fansensors[$fancfg[$temphdd]];
-                $templo  = 'TEMPLO_'.$name;
-                $temphi  = 'TEMPHI_'.$name;
-                $fanmax  = 'FANMAX_'.$name;
-                $fanmin  = 'FANMIN_'.$name;
-                $temploo  = 'TEMPLOO_'.$name;
-                $temphio  = 'TEMPHIO_'.$name;
-                $fanmaxo  = 'FANMAXO_'.$name;
-                $fanmino  = 'FANMINO_'.$name;
+    $i = 0;
+    $fan1234 = 0;
+    $sysfan = 0;
+    $cpufan = 0;
+    $board_profile = ipmi_resolve_asrock_fan_profile($board, $board_model, $board_json);
+    $seen_asrock_fans = [];
 
-                $fan_configured = false;
-                if($board_file_status){
-                    if (isset($board_json[$board]['fans']) && array_key_exists($name, $board_json[$board]['fans'])) {
-                        $fan_configured = true;
-                    } elseif ($cmd_count !== 0 && isset($board_json["{$board}1"]['fans']) && array_key_exists($name, $board_json["{$board}1"]['fans'])) {
-                        $fan_configured = true;
-                    }
-                }
+    foreach($fansensors as $id => $fan){
+        if($i > 11) break;
+        if ($fan['Type'] !== 'Fan')
+            continue;
 
-                echo '<section class="ipmi-fan-card', ($fan_configured ? '' : ' needs-mapping'), '" data-fan-name="', $name, '">';
-                echo '<div class="ipmi-fan-card-header"><h4>', $display, '</h4><span class="ipmi-fan-card-status ', ($fan_configured ? 'ok' : 'warn'), '">', ($fan_configured ? 'Mapped' : 'Needs Mapping'), '</span></div>';
+        $raw_name = $fan['Name'];
+        $name = htmlspecialchars($raw_name);
+        $display = $name;
 
-                // hidden fan id
-                echo '<input type="hidden" name="FAN_',$name,'" value="',$id,'"/>';
+        if (($board === 'ASRock' || $board === 'ASRockRack') && !empty($board_profile)) {
+            $canonical_name = ipmi_canonicalize_asrock_fan_name_for_profile($board_profile, $raw_name);
+            if (array_key_exists($canonical_name, $seen_asrock_fans))
+                continue;
 
-                // fan name: reading => temp name: reading
-                echo '<div class="ipmi-fan-card-summary"><dl class="ipmi-fan-summary"><dt>',$display,' (',floatval($fan['Reading']),' ',$fan['Units'],'):</dt><dd><span class="fanctrl-basic">';
-                if ($temp['Name']){
-                    echo $temp['Name'],' ('.my_temp(floatval($temp['Reading'])),' ','), ',
-                    $fancfg[$templo],', ',$fancfg[$temphi],', ',number_format((intval(intval($fancfg[$fanmin])/$range*1000)/10),1),'-',number_format((intval(intval($fancfg[$fanmax])/$range*1000)/10),1),'%';
-                }else{
-                    echo 'Auto';
-                }
-                
-                echo $display,' (',floatval($fan['Reading']),' ',$fan['Units'],'):';
-                if (isset($temphddd['Name'])){
-                    echo '&nbsp;&nbsp;&nbsp;&nbsp;Override:'.$temphddd['Name'].' ('.my_temp(floatval($temp['Reading'])),' ','), ',
-                    $fancfg[$temploo],', ',$fancfg[$temphio],', ',number_format((intval(intval($fancfg[$fanmino])/$range*1000)/10),1),'-',number_format((intval(intval($fancfg[$fanmaxo])/$range*1000)/10),1),'%';
-                }else{
-                    echo 'Not Defined';
-                }
-                echo '</span><span class="fanctrl-settings">&nbsp;</span>';
+            $seen_asrock_fans[$canonical_name] = true;
+            $name = htmlspecialchars($canonical_name);
+            $display = ($canonical_name === $raw_name) ? $name : htmlspecialchars($canonical_name.' / '.$raw_name);
+        }
 
-                // check if board.json exists then if fan name is in board.json
-                $noconfig = '<font class="red"><b><i> (fan is not configured!)</i></b></font>';
-                if(!$fan_configured)
-                    echo $noconfig;
-
-                echo '</dd></dl></div><div class="ipmi-fan-card-controls">';
-
-                // temperature sensor
-                echo '<dl class="fanctrl-settings">',
-                '<dt><dl><dd>Temperature sensor:</dd></dl></dt><dd>',
-                '<select name="',$tempid,'" class="fanctrl-temp fanctrl-settings">',
-                '<option value="0">Auto</option>',
-                get_temp_options($fancfg[$tempid]),
-                '</select></dd></dl>';
-                
-                if ($fancfg[$tempid] == "99") $disabled = "" ; else $disabled = " disabled ";
-
-                // high temperature threshold
-                echo '<dl class="fanctrl-settings">',
-                '<dt><dl><dd>High temperature threshold (&deg;'.$display_unit.'):</dd></dl></dt>',
-                '<dd><select name="',$temphi,'" class="',$tempid,' fanctrl-settings">',
-                get_temp_range('HI', $fancfg[$temphi],$display_unit),
-                '</select></dd></dl>';
-
-                // low temperature threshold
-                echo '<dl class="fanctrl-settings">',
-                '<dt><dl><dd>Low temperature threshold (&deg;'.$display_unit.'):</dd></dl></dt>',
-                '<dd><select name="',$templo,'" class="',$tempid,' fanctrl-settings">',
-                get_temp_range('LO', $fancfg[$templo],$display_unit),
-                '</select></dd></dl>';
-
-                // fan control maximum speed
-                echo '<dl class="fanctrl-settings">',
-                '<dt><dl><dd>Fan speed maximum (%):</dd></dl></dt><dd>',
-                '<select name="',$fanmax,'" class="',$tempid,' fanctrl-settings">',
-                get_minmax_options('HI', $fancfg[$fanmax]),
-                '</select></dd></dl>';
-
-                // fan control minimum speed
-                echo '<dl class="fanctrl-settings">',
-                '<dt><dl><dd>Fan speed minimum (%):</dd></dl></dt><dd>',
-                '<select name="',$fanmin,'" class="',$tempid,' fanctrl-settings">',
-                get_minmax_options('LO', $fancfg[$fanmin]),
-                '</select></dd></dl>&nbsp;';
-       
-                // temperature sensor Spundown
-                echo '<dl class="fanctrl-settings">',
-                '<dt><dl><dd>HDD Spundown Temperature sensor:</dd></dl></dt><dd>',
-                '<select', $disabled, ' name="', $temphdd, '" class="fanctrl-temp fanctrl-settings">',
-                '<option value="0">None</option>',
-                get_temp_options($fancfg[$temphdd]),
-                '</select></dd></dl>';
-
-                // Check if the Spundown values should be shown
-                if ($fancfg[$temphdd] != 0) {
-                // high temperature threshold Spundown
-                echo '<dl class="fanctrl-settings">',
-                '<dt><dl><dd>High temperature threshold Spundown (&deg;', $display_unit, '):</dd></dl></dt>',
-                '<dd><select name="', $temphio, '" class="', $tempid, ' fanctrl-settings">',
-                get_temp_range('HI', $fancfg[$temphio], $display_unit),
-                '</select></dd></dl>';
-
-                // low temperature threshold Spundown
-               echo '<dl class="fanctrl-settings">',
-               '<dt><dl><dd>Low temperature threshold Spundown (&deg;', $display_unit, '):</dd></dl></dt>',
-               '<dd><select name="', $temploo, '" class="', $tempid, ' fanctrl-settings">',
-               get_temp_range('LO', $fancfg[$temploo], $display_unit),
-               '</select></dd></dl>';
-
-               // fan control maximum speed Spundown
-               echo '<dl class="fanctrl-settings">',
-               '<dt><dl><dd>Fan speed maximum Spundown (%):</dd></dl></dt><dd>',
-               '<select name="', $fanmaxo, '" class="', $tempid, ' fanctrl-settings">',
-               get_minmax_options('HI', $fancfg[$fanmaxo]),
-               '</select></dd></dl>';
-
-              // fan control minimum speed Spundown
-	              echo '<dl class="fanctrl-settings">',
-	              '<dt><dl><dd>Fan speed minimum Spundown (%):</dd></dl></dt><dd>',
-	              '<select name="', $fanmino, '" class="', $tempid, ' fanctrl-settings">',
-	              get_minmax_options('LO', $fancfg[$fanmino]),
-	            '</select></dd></dl>&nbsp;';
-	            }
-
-                echo '</div></section>';
+        if($board === 'Supermicro'){
+            $syscpu = false;
+            if(strpos($name, 'SYS_FAN') !== false){
+                $syscpu = true;
                 $i++;
+                if($sysfan == 0){
+                    $name = 'FANA';
+                    $display = 'SYS_FAN';
+                    $sysfan++;
+                } else {
+                    continue;
+                }
+            } elseif(strpos($name, 'CPU_FAN') !== false){
+                $syscpu = true;
+                $i++;
+                if($cpufan == 0){
+                    $name = 'FAN1234';
+                    $display = 'CPU_FAN';
+                    $cpufan++;
+                } else {
+                    continue;
+                }
+            } elseif($name !== 'FANA' && !$syscpu) {
+                if($fan1234 == 0){
+                    $name = 'FAN1234';
+                    $display = 'FAN1234';
+                    $fan1234++;
+                } else {
+                    continue;
+                }
             }
         }
-    } else {
-        echo '<dl><dt>&nbsp;</dt><dd><p><b><font class="red">Your board is not currently supported</font></b></p></dd></dl>';
+
+        if($board === 'Dell'){
+            $i++;
+            if($fan1234 == 0){
+                $name = 'FAN123456';
+                $display = 'FAN123456';
+                $fan1234++;
+            } else {
+                continue;
+            }
+        }
+
+        $tempid   = 'TEMP_'.$name;
+        $temphdd  = 'TEMPHDD_'.$name;
+        $templo   = 'TEMPLO_'.$name;
+        $temphi   = 'TEMPHI_'.$name;
+        $fanmax   = 'FANMAX_'.$name;
+        $fanmin   = 'FANMIN_'.$name;
+        $temploo  = 'TEMPLOO_'.$name;
+        $temphio  = 'TEMPHIO_'.$name;
+        $fanmaxo  = 'FANMAXO_'.$name;
+        $fanmino  = 'FANMINO_'.$name;
+
+        $temp = [];
+        if (!empty($fancfg[$tempid]) && isset($fansensors[$fancfg[$tempid]]))
+            $temp = $fansensors[$fancfg[$tempid]];
+
+        $temphddd = [];
+        if (!empty($fancfg[$temphdd]) && isset($fansensors[$fancfg[$temphdd]]))
+            $temphddd = $fansensors[$fancfg[$temphdd]];
+
+        $fan_configured = false;
+        if($board_file_status){
+            if (isset($board_json[$board]['fans']) && array_key_exists($name, $board_json[$board]['fans'])) {
+                $fan_configured = true;
+            } elseif ($cmd_count !== 0 && isset($board_json["{$board}1"]['fans']) && array_key_exists($name, $board_json["{$board}1"]['fans'])) {
+                $fan_configured = true;
+            }
+        }
+
+        $normal_sensor_name = !empty($temp['Name']) ? htmlspecialchars($temp['Name']) : 'Auto';
+        $normal_sensor_meta = !empty($temp['Name'])
+            ? my_temp(floatval($temp['Reading'])).' reading'
+            : 'Firmware controls the curve when no sensor is selected';
+        $normal_curve = $fancfg[$templo].' to '.$fancfg[$temphi].' deg'.$display_unit;
+        $normal_duty = number_format((intval(intval($fancfg[$fanmin]) / $range * 1000) / 10), 1).'% to '.number_format((intval(intval($fancfg[$fanmax]) / $range * 1000) / 10), 1).'%';
+        $override_sensor_name = !empty($temphddd['Name']) ? htmlspecialchars($temphddd['Name']) : 'None';
+        $override_sensor_meta = !empty($temphddd['Name'])
+            ? my_temp(floatval($temphddd['Reading'])).' reading'
+            : 'No HDD spindown override configured';
+        $override_curve = $fancfg[$temploo].' to '.$fancfg[$temphio].' deg'.$display_unit;
+        $override_duty = number_format((intval(intval($fancfg[$fanmino]) / $range * 1000) / 10), 1).'% to '.number_format((intval(intval($fancfg[$fanmaxo]) / $range * 1000) / 10), 1).'%';
+        $fan_rpm = floatval($fan['Reading']).' '.$fan['Units'];
+        $override_disabled = ($fancfg[$tempid] == "99") ? '' : ' disabled';
+        $override_selected = !empty($fancfg[$temphdd]) && $fancfg[$temphdd] != 0;
+
+        echo '<section class="ipmi-fan-card', ($fan_configured ? '' : ' needs-mapping'), '" data-fan-name="', $name, '">';
+        echo '<div class="ipmi-fan-card-header">';
+        echo '<div><h4>', $display, '</h4><div class="ipmi-fan-card-subtitle">Live speed ', $fan_rpm, '</div></div>';
+        echo '<span class="ipmi-fan-card-status ', ($fan_configured ? 'ok' : 'warn'), '">', ($fan_configured ? 'Mapped' : 'Needs Mapping'), '</span>';
+        echo '</div>';
+
+        echo '<input type="hidden" name="FAN_', $name, '" value="', $id, '"/>';
+
+        echo '<div class="ipmi-fan-card-summary">';
+        echo '<div class="fanctrl-basic ipmi-fan-stat-grid">';
+        echo '<div class="ipmi-fan-stat"><span class="ipmi-fan-stat__label">Header</span><span class="ipmi-fan-stat__value">', $display, '</span><span class="ipmi-fan-stat__meta">Current fan speed ', $fan_rpm, '</span></div>';
+        echo '<div class="ipmi-fan-stat"><span class="ipmi-fan-stat__label">Primary Sensor</span><span class="ipmi-fan-stat__value">', $normal_sensor_name, '</span><span class="ipmi-fan-stat__meta">', $normal_sensor_meta, '<br>', $normal_curve, '</span></div>';
+        echo '<div class="ipmi-fan-stat"><span class="ipmi-fan-stat__label">Duty Range</span><span class="ipmi-fan-stat__value">', $normal_duty, '</span><span class="ipmi-fan-stat__meta">Applied while the primary sensor is active.</span></div>';
+        echo '<div class="ipmi-fan-stat"><span class="ipmi-fan-stat__label">HDD Spindown Override</span><span class="ipmi-fan-stat__value">', $override_sensor_name, '</span><span class="ipmi-fan-stat__meta">', $override_sensor_meta, '<br>', $override_curve, ' at ', $override_duty, '</span></div>';
+        echo '</div>';
+
+        if(!$fan_configured)
+            echo '<div class="ipmi-alert ipmi-alert--warning"><p>This header is not mapped in <code>board.json</code> yet. Run <strong>Scan Headers</strong> before enabling daemon control.</p></div>';
+
+        echo '</div>';
+
+        echo '<div class="ipmi-fan-card-controls">';
+        echo '<div class="ipmi-fan-control-grid">';
+
+        echo '<div class="ipmi-field fanctrl-settings">';
+        echo '<label class="ipmi-field__label" for="', $tempid, '">Temperature sensor</label>';
+        echo '<select id="', $tempid, '" name="', $tempid, '" class="fanctrl-temp" data-fan-name="', $name, '">';
+        echo '<option value="0">Auto</option>', get_temp_options($fancfg[$tempid]), '</select>';
+        echo '<div class="ipmi-field__help">Sensor used for the primary fan curve.</div>';
+        echo '</div>';
+
+        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $tempid, '">';
+        echo '<label class="ipmi-field__label" for="', $temphi, '">High threshold (deg', $display_unit, ')</label>';
+        echo '<select id="', $temphi, '" name="', $temphi, '" class="', $tempid, '">', get_temp_range('HI', $fancfg[$temphi], $display_unit), '</select>';
+        echo '<div class="ipmi-field__help">At or above this point the header runs at its configured maximum.</div>';
+        echo '</div>';
+
+        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $tempid, '">';
+        echo '<label class="ipmi-field__label" for="', $templo, '">Low threshold (deg', $display_unit, ')</label>';
+        echo '<select id="', $templo, '" name="', $templo, '" class="', $tempid, '">', get_temp_range('LO', $fancfg[$templo], $display_unit), '</select>';
+        echo '<div class="ipmi-field__help">Below this point the header can fall to its configured minimum.</div>';
+        echo '</div>';
+
+        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $tempid, '">';
+        echo '<label class="ipmi-field__label" for="', $fanmax, '">Maximum duty</label>';
+        echo '<select id="', $fanmax, '" name="', $fanmax, '" class="', $tempid, '">', get_minmax_options('HI', $fancfg[$fanmax]), '</select>';
+        echo '<div class="ipmi-field__help">Caps the highest duty percentage for this header.</div>';
+        echo '</div>';
+
+        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $tempid, '">';
+        echo '<label class="ipmi-field__label" for="', $fanmin, '">Minimum duty</label>';
+        echo '<select id="', $fanmin, '" name="', $fanmin, '" class="', $tempid, '">', get_minmax_options('LO', $fancfg[$fanmin]), '</select>';
+        echo '<div class="ipmi-field__help">Prevents the header from dropping below this duty percentage.</div>';
+        echo '</div>';
+
+        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $tempid, '">';
+        echo '<label class="ipmi-field__label" for="', $temphdd, '">HDD spindown sensor</label>';
+        echo '<select id="', $temphdd, '"', $override_disabled, ' name="', $temphdd, '" class="fanctrl-temp fanctrl-override-source" data-fan-name="', $name, '">';
+        echo '<option value="0">None</option>', get_temp_options($fancfg[$temphdd]), '</select>';
+        echo '<div class="ipmi-field__help">Optional override used while your array drives are spun down.</div>';
+        echo '</div>';
+
+        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $temphdd, '"', ($override_selected ? '' : ' style="display:none;"'), '>';
+        echo '<label class="ipmi-field__label" for="', $temphio, '">Override high threshold (deg', $display_unit, ')</label>';
+        echo '<select id="', $temphio, '" name="', $temphio, '" class="', $temphdd, '">', get_temp_range('HI', $fancfg[$temphio], $display_unit), '</select>';
+        echo '<div class="ipmi-field__help">Upper threshold for the spindown override curve.</div>';
+        echo '</div>';
+
+        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $temphdd, '"', ($override_selected ? '' : ' style="display:none;"'), '>';
+        echo '<label class="ipmi-field__label" for="', $temploo, '">Override low threshold (deg', $display_unit, ')</label>';
+        echo '<select id="', $temploo, '" name="', $temploo, '" class="', $temphdd, '">', get_temp_range('LO', $fancfg[$temploo], $display_unit), '</select>';
+        echo '<div class="ipmi-field__help">Lower threshold for the spindown override curve.</div>';
+        echo '</div>';
+
+        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $temphdd, '"', ($override_selected ? '' : ' style="display:none;"'), '>';
+        echo '<label class="ipmi-field__label" for="', $fanmaxo, '">Override maximum duty</label>';
+        echo '<select id="', $fanmaxo, '" name="', $fanmaxo, '" class="', $temphdd, '">', get_minmax_options('HI', $fancfg[$fanmaxo]), '</select>';
+        echo '<div class="ipmi-field__help">Maximum duty while the spindown override is active.</div>';
+        echo '</div>';
+
+        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $temphdd, '"', ($override_selected ? '' : ' style="display:none;"'), '>';
+        echo '<label class="ipmi-field__label" for="', $fanmino, '">Override minimum duty</label>';
+        echo '<select id="', $fanmino, '" name="', $fanmino, '" class="', $temphdd, '">', get_minmax_options('LO', $fancfg[$fanmino]), '</select>';
+        echo '<div class="ipmi-field__help">Minimum duty while the spindown override is active.</div>';
+        echo '</div>';
+
+        echo '</div>';
+        echo '</div>';
+        echo '</section>';
+        $i++;
     }
 }
 

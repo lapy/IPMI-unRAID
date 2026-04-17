@@ -3,19 +3,12 @@ Title="Config Editor"
 Tag="cogs"
 Markdown="false"
 ---
+<link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/ipmi.css');?>">
+<link type="text/css" rel="stylesheet" href="<?=autov('/webGui/styles/jquery.switchbutton.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/codemirror/codemirror.min.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/codemirror/show-hint.min.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/codemirror/dialog.min.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/codemirror/dracula.min.css');?>">
-<style type="text/css">
-    .CodeMirror { border: 1px solid #eee; cursor: text; margin-top: 15px; margin-bottom: 10px; }
-    .CodeMirror pre.CodeMirror-placeholder { color: #999; }
-    .fileTree{width:305px;max-height:150px;overflow:scroll;position:absolute;z-index:100;display:none;}
-</style>
-
-<div id="title" style="margin-top: -22px;">
-    <span class="left"><i class="icon fa fa-cogs"></i> IPMI Configuration Editor</span>
-</div>
 
 <form id="autoload-form" method="POST" action="/update.php" target="progressFrame">
     <input type="hidden" id="autoload" name="LOADCFG" value="disable" />
@@ -23,53 +16,45 @@ Markdown="false"
     <input type="hidden" name="#command" value="" />
 </form>
 
-<blockquote class="inline_help">
-    <p>IPMI Config Editor is used to get and set configuration parameters in IPMI. In can be used to configured usernames, passwords, networking information, security, Serial-over-LAN (SOL), Platform Event Filtering (PEF), boot devices, power restoration policy, and many more configuration options.</p>
-    <p><b>Search Functions:</b></p>
-    <dl>
-    <dt>Ctrl-F / Cmd-F</dt>
-    <dd>Start searching</dd>
-    <dt>Ctrl-G / Cmd-G</dt>
-    <dd>Find next</dd>
-    <dt>Shift-Ctrl-G / Shift-Cmd-G</dt>
-    <dd>Find previous</dd>
-    <dt>Shift-Ctrl-F / Cmd-Option-F</dt>
-    <dd>Replace</dd>
-    <dt>Shift-Ctrl-R / Shift-Cmd-Option-F</dt>
-    <dd>Replace all</dd>
-    </dl>
-</blockquote>
+<div class="ipmi-shell ipmi-editor-shell">
+    <div class="ipmi-tool-header">
+        <div>
+            <h1>IPMI Configuration Editor</h1>
+            <p>Inspect or edit the stored BMC configuration, sensor configuration, or board JSON with a safer editing shell and clearer actions.</p>
+        </div>
+    </div>
 
-<form id="cfgform" method="POST">
-<div style="margin-top: -10px;">
-<span class="left">
-    <select id="editfile" name="editfile">
-        <option>Select Config...</option>
-        <option>Config</option>
-        <option>Sensors</option>
-        <option>Json</option>
-    </select>
-</span>
-<span class="status" style="margin-top: 5px;" id="load-switch" hidden><input type="checkbox" id="autoload-switch"></span>
+    <div class="ipmi-alert ipmi-alert--warning">
+        <p><strong>Edit carefully.</strong> These files can change credentials, networking, sensor thresholds, boot devices, and other low-level BMC behavior.</p>
+        <p><strong>Editor shortcuts:</strong> Ctrl/Cmd-F search, Ctrl/Cmd-G next, Shift-Ctrl/Cmd-G previous, Shift-Ctrl/Cmd-F replace, Shift-Ctrl/Cmd-R replace all.</p>
+    </div>
+
+    <section class="ipmi-section-card">
+        <form id="cfgform" method="POST">
+            <div class="ipmi-editor-toolbar">
+                <select id="editfile" name="editfile">
+                    <option>Select Config...</option>
+                    <option>Config</option>
+                    <option>Sensors</option>
+                    <option>Json</option>
+                </select>
+                <span class="status" id="load-switch" hidden><input type="checkbox" id="autoload-switch"></span>
+            </div>
+
+            <textarea id="editcfg" name="ipmicfg" placeholder="Select IPMI Configuration above." autocomplete="" focus></textarea>
+            <input type="hidden" id="commit" name="commit" value="1" />
+            <input type="hidden" id="ipmiconfig" name="config" value="1" />
+            <input type="hidden" name="csrf_token" value="<?=$var['csrf_token']?>" />
+
+            <div class="ipmi-actions">
+                <input type="button" value="Revert" id="btnRevert" title="Reset the stored IPMI config file to the existing BMC config" />
+                <input type="button" value="Save" id="btnSubmit" title="Save IPMI configuration changes to the BMC" />
+                <input type="button" value="Cancel" id="btnCancel" />
+                <span class="warning"><i class="fa fa-warning icon warning"></i> Live BMC configuration changes apply immediately when saved.</span>
+            </div>
+        </form>
+    </section>
 </div>
-
-<textarea id="editcfg" name="ipmicfg" placeholder="Select IPMI Configuration above." autocomplete="" focus></textarea>
-<input type="hidden" id="commit" name="commit" value="1" />
-<input type="hidden" id="ipmiconfig" name="config" value="1" />
-<input type="hidden" name="csrf_token" value="<?=$var['csrf_token']?>" />
-
-<dl>
-    <dt><input type="button" value="Revert" id="btnRevert" title="reset the stored IPMI config file to the existing BMC config" /></dt>
-    <dd><span><input type="button" value="Save" id="btnSubmit" title="save IPMI configuration changes to the BMC" />
-    <input type="button" value="Cancel" id="btnCancel" />
-    <i class="fa fa-warning icon warning"></i> Edit Carefully!</span>
-    </dd>
-</form>
-</dl>
-
-<blockquote class="inline_help">
-    <p>The Revert button resets the stored IPMI configuration file to the existing configuration loaded on the BMC.  The Save button saves IPMI configuration changes to the BMC.</p>
-</blockquote>
 
 <script src="<?=autov('/plugins/ipmi/js/codemirror/codemirror.min.js');?>"></script>
 <script src="<?=autov('/plugins/ipmi/js/codemirror/dialog.min.js');?>"></script>
@@ -79,6 +64,7 @@ Markdown="false"
 <script src="<?=autov('/plugins/ipmi/js/codemirror/anyword-hint.min.js');?>"></script>
 <script src="<?=autov('/plugins/ipmi/js/codemirror/searchcursor.min.js');?>"></script>
 <script src="<?=autov('/plugins/ipmi/js/codemirror/search.min.js');?>"></script>
+<script src="<?=autov('/webGui/javascript/jquery.switchbutton.js');?>"></script>
 <script>
 window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
 </script>

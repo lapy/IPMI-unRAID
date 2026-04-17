@@ -359,12 +359,29 @@ function ipmi_validate_csrf_token($token) {
     return true;
 }
 
+function ipmi_request_has_prevalidated_csrf() {
+    if (PHP_SAPI === 'cli')
+        return false;
+
+    if (strtoupper((string)ipmi_array_get($_SERVER, 'REQUEST_METHOD', 'GET')) !== 'POST')
+        return false;
+
+    if (array_key_exists('csrf_token', $_POST))
+        return false;
+
+    return function_exists('csrf_token') ||
+        (isset($GLOBALS['var']) && is_array($GLOBALS['var']) && !empty($GLOBALS['var']['csrf_token']));
+}
+
 function ipmi_require_post_request() {
     if (strtoupper((string)ipmi_array_get($_SERVER, 'REQUEST_METHOD', 'GET')) !== 'POST')
         ipmi_json_response(false, 'POST is required for this endpoint.', [], ['invalid_method']);
 }
 
 function ipmi_require_csrf() {
+    if (ipmi_request_has_prevalidated_csrf())
+        return;
+
     $token = ipmi_array_get($_POST, 'csrf_token', '');
     if (!ipmi_validate_csrf_token($token))
         ipmi_json_response(false, 'CSRF token is missing or invalid.', [], ['invalid_csrf']);

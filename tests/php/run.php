@@ -72,6 +72,26 @@ $updated_manifest = ipmi_release_update_manifest_text($manifest_fixture, '2026.0
 assert_true(strpos($updated_manifest, '<!ENTITY version   "2026.04.17">') !== false, 'Release helper should update the version entity.');
 assert_true(strpos($updated_manifest, "###2026.04.17\n- First item\n- Second item\n###2025.12.13") !== false, 'Release helper should prepend the latest changelog entry.');
 
+$original_server = $_SERVER ?? [];
+$original_post = $_POST ?? [];
+$original_var = $GLOBALS['var'] ?? null;
+
+$_SERVER['REQUEST_METHOD'] = 'POST';
+$_POST = [];
+$GLOBALS['var'] = ['csrf_token' => 'validated-upstream'];
+assert_true(ipmi_request_has_prevalidated_csrf() === true, 'POST requests should treat upstream-validated CSRF as satisfied when the token has already been stripped.');
+
+$_POST = ['csrf_token' => 'validated-upstream'];
+assert_true(ipmi_request_has_prevalidated_csrf() === false, 'Explicit csrf_token POST fields should still go through direct token validation.');
+
+$_SERVER = $original_server;
+$_POST = $original_post;
+if ($original_var === null) {
+    unset($GLOBALS['var']);
+} else {
+    $GLOBALS['var'] = $original_var;
+}
+
 $temp_file = tempnam(sys_get_temp_dir(), 'ipmi-runtime.');
 assert_true($temp_file !== false, 'Temporary file should be created.');
 assert_true(ipmi_atomic_write($temp_file, "first\n", false), 'Atomic write should succeed.');

@@ -8,48 +8,51 @@ Markdown="true"
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/tablesorter.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/tablesorter-'.(($display['theme'] == 'white' || $display['theme'] == 'azure') ? 'white' : 'black').'.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/webGui/styles/jquery.switchbutton.css');?>">
-<style>
-table.tablesorter tbody tr:nth-child(odd) {
-    background-color: #<?=($display['theme'] == 'white' || $display['theme'] == 'azure') ? 'F0F0F0' : '212421';?>;
-}
-table.tablesorter tbody tr:nth-child(even) {
-    background-color: #<?=($display['theme'] == 'white' || $display['theme'] == 'azure') ? 'e4e2e4' : '1b1d1b';?>;
-}
-</style>
 
-<div><div>
-    <span id="adv-switch" class="status"><input type='checkbox' id='advancedview'></span>
-    <table class="tablesorter shift hover-highlight sensors" id="tblSensor">
-        <thead>
-            <tr>
-                <th class="sorter-false filter-false"> Status </th>
-                <th class="network sorter-ipv4Address filter-ip" data-placeholder="by ip address"> IP Address </th>
-                <th class="advanced filter-false"> ID </th>
-                <th class="filter-false"> Sensor </th>
-                <th class="advanced filter-false"> Lower <br> Non-Recover </th>
-                <th class="advanced filter-false"> Lower <br> Critical </th>
-                <th class="advanced filter-false"> Lower <br> Non-Critical </th>
-                <th class="filter-reading" data-placeholder="by status"> Reading </th>
-                <th class="filter-type" data-placeholder="by type"> Type </th>
-                <th class="advanced filter-false"> Upper <br> Non-Critical </th>
-                <th class="advanced filter-false"> Upper <br> Critical </th>
-                <th class="advanced filter-false"> Upper <br> Non-Recover </th>
-            </tr>
-        </thead>
-        <tbody>
-        </tbody>
-    </table>
-    <blockquote class="inline_help">
-        <p>Table of sensor readings that can be sorted and filtered. Thresholds and other values are displayed with the basic/advanced view switch.</p>
-    </blockquote>
-    <dl>
-        <dt>&nbsp;</dt>
-        <dd><span class="buttons-spaced"><button type="button" class="reset-sensors" title="reset table sorting filters">Reset Filters</button><button type="button" onClick="done();">Done</button></dd></span>
-    </dl>
-    <blockquote class="inline_help">
-        <p>Reset Filters button resets table filters. Settings button navigates to the IPMI settings page.  Edit button allows you to edit your IPMI thresholds and sensor events configuration.  Done button navigates to the Tools menu. </p>
-    </blockquote>
-</div></div>
+<div class="ipmi-shell ipmi-tool-shell">
+    <div class="ipmi-tool-header">
+        <div>
+            <h1>Sensor Readings</h1>
+            <p>Live sensor inventory with saved filters, severity-aware reading colors, and an advanced threshold view when you need the raw IPMI details.</p>
+        </div>
+        <div class="ipmi-switch-meta">
+            <span class="ipmi-switch-label">Advanced columns</span>
+            <span id="adv-switch" class="status"><input type='checkbox' id='advancedview'></span>
+        </div>
+    </div>
+
+    <div class="ipmi-alert ipmi-alert--info">
+        <p>Basic view focuses on the current reading, while advanced view exposes lower and upper threshold values from the BMC.</p>
+    </div>
+
+    <div class="ipmi-table-shell">
+        <table class="tablesorter shift hover-highlight sensors" id="tblSensor">
+            <thead>
+                <tr>
+                    <th class="sorter-false filter-false"> Status </th>
+                    <th class="network sorter-ipv4Address filter-ip" data-placeholder="by ip address"> IP Address </th>
+                    <th class="advanced filter-false"> ID </th>
+                    <th class="filter-false"> Sensor </th>
+                    <th class="advanced filter-false"> Lower <br> Non-Recover </th>
+                    <th class="advanced filter-false"> Lower <br> Critical </th>
+                    <th class="advanced filter-false"> Lower <br> Non-Critical </th>
+                    <th class="filter-reading" data-placeholder="by status"> Reading </th>
+                    <th class="filter-type" data-placeholder="by type"> Type </th>
+                    <th class="advanced filter-false"> Upper <br> Non-Critical </th>
+                    <th class="advanced filter-false"> Upper <br> Critical </th>
+                    <th class="advanced filter-false"> Upper <br> Non-Recover </th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="ipmi-actions">
+        <button type="button" class="reset-sensors" title="Reset table sorting filters">Reset Filters</button>
+        <button type="button" onClick="done();">Done</button>
+    </div>
+</div>
 
 <script src="<?=autov('/plugins/ipmi/js/jquery.tablesorter.combined.min.js');?>"></script>
 <script src="<?=autov('/plugins/ipmi/js/jquery.tablesorter.pager.min.js');?>"></script>

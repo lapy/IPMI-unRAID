@@ -5,7 +5,16 @@ function ipmiResponseText(response) {
   return 'Request failed.';
 }
 
+function ipmiResolveCsrfToken() {
+  if (window.IPMI_CSRF_TOKEN) return window.IPMI_CSRF_TOKEN;
+  if (window.csrf_token) return window.csrf_token;
+
+  var input = document.querySelector('input[name="csrf_token"]');
+  return input ? input.value : '';
+}
+
 function ipmiPost(path, payload, onSuccess, onError) {
+  var csrfToken = ipmiResolveCsrfToken();
   var requestPayload;
   if ($.isArray(payload)) {
     requestPayload = payload.slice(0);
@@ -13,11 +22,11 @@ function ipmiPost(path, payload, onSuccess, onError) {
       return entry && entry.name === 'csrf_token';
     });
     if (!hasCsrf) {
-      requestPayload.push({name: 'csrf_token', value: window.IPMI_CSRF_TOKEN || ''});
+      requestPayload.push({name: 'csrf_token', value: csrfToken});
     }
   } else {
     requestPayload = $.extend({}, payload || {}, {
-      csrf_token: window.IPMI_CSRF_TOKEN || ''
+      csrf_token: csrfToken
     });
   }
 

@@ -3,50 +3,64 @@ Title="Event Log"
 Tag="file"
 Markdown="false"
 ---
-<div>
-    <span id="arch-switch" class="status"><input type="checkbox" id="event-arch"></span>
-    <table class="tablesorter shift hover-highlight events" id="tblEvent">
-        <thead>
-            <tr>
-                <th class="sorter-false filter-false"> Status </th>
-                <th class="network sorter-ipv4Address filter-ip" data-placeholder="by IP Address"> IP Address </th>
-                <th class="filter-false"> Event ID </th>
-                <th class="filter-time" data-placeholder="by timestamp"> Timestamp </th>
-                <th class="filter-name" data-placeholder="Search..."> Sensor Name </th>
-                <th class="filter-type" data-placeholder="by type"> Sensor Type </th>
-                <th class="filter-desc" data-placeholder="Search..."> Description </th>
-                <th class="filter-false sorter-false"><a id='allEvents' title='clear all'><i class="fa fa-trash"> Clear All </i></a></th>
-            </tr>
-        </thead>
-        <tbody>
-        </tbody>
-    </table>
-    <blockquote class="inline_help">
-        <p>Table of IPMI events. Can be sorted, filtered and searched. Archive switch enables deleted events to be saved on the flash drive and displayed in the Archived Events tab.</p>
-    </blockquote>
+<link type="text/css" rel="stylesheet" href="<?=autov('/webGui/styles/jquery.switchbutton.css');?>">
+<link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/ipmi.css');?>">
+<link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/tablesorter.css');?>">
+<link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/tablesorter-'.(($display['theme'] == 'white' || $display['theme'] == 'azure') ? 'white' : 'black').'.css');?>">
+
+<div class="ipmi-shell ipmi-tool-shell">
+    <div class="ipmi-tool-header">
+        <div>
+            <h1>Event Log</h1>
+            <p>Search, filter, and triage current SEL-derived events. Archive mode keeps deleted entries on flash storage for later review.</p>
+        </div>
+        <div class="ipmi-switch-meta">
+            <span class="ipmi-switch-label">Archive deleted events</span>
+            <span id="arch-switch" class="status"><input type="checkbox" id="event-arch"></span>
+        </div>
+    </div>
+
+    <div class="ipmi-table-shell">
+        <table class="tablesorter shift hover-highlight events" id="tblEvent">
+            <thead>
+                <tr>
+                    <th class="sorter-false filter-false"> Status </th>
+                    <th class="network sorter-ipv4Address filter-ip" data-placeholder="by IP Address"> IP Address </th>
+                    <th class="filter-false"> Event ID </th>
+                    <th class="filter-time" data-placeholder="by timestamp"> Timestamp </th>
+                    <th class="filter-name" data-placeholder="Search..."> Sensor Name </th>
+                    <th class="filter-type" data-placeholder="by type"> Sensor Type </th>
+                    <th class="filter-desc" data-placeholder="Search..."> Description </th>
+                    <th class="filter-false sorter-false"><a id='allEvents' title='clear all'><i class="fa fa-trash"> Clear All </i></a></th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="pager" class="pager">
+        <form>
+            <a class="first"><i class="fa fa-step-backward"></i></a>
+            <a class="prev"><i class="fa fa-backward"></i></a>
+            <span class="pagedisplay"></span>
+            <a class="next"><i class="fa fa-forward"></i></a>
+            <a class="last"><i class="fa fa-step-forward"></i></a>
+            <select class="pagesize">
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="15">15</option>
+                <option value="20">20</option>
+                <option value="all">All</option>
+            </select>
+            <a title="reset filters" class="reset-events"><i class="fa fa-undo"></i></a>
+        </form>
+    </div>
 </div>
-<div id="pager" class="pager">
-    <form>
-        <a class="first"><i class="fa fa-step-backward"></i></a>
-        <a class="prev"><i class="fa fa-backward"></i></a>
-        <span class="pagedisplay"></span>
-        <a class="next"><i class="fa fa-forward"></i></a>
-        <a class="last"><i class="fa fa-step-forward"></i></a>
-        <select class="pagesize">
-            <option value="5">5</option>
-            <option value="10">10</option>
-            <option value="15">15</option>
-            <option value="20">20</option>
-            <option value="all">All</option>
-        </select>
-        &nbsp;
-        <a  title="reset filters" class="reset-events"><i class="fa fa-undo"></i></a>
-    </form>
-    <blockquote class="inline_help">
-        <p>Table is split into pages. Drop down selects the number of rows to display per page. Reset button resets the table filters.</p>
-    </blockquote>
-</div>
+<script src="<?=autov('/plugins/ipmi/js/jquery.tablesorter.combined.min.js');?>"></script>
+<script src="<?=autov('/plugins/ipmi/js/jquery.tablesorter.pager.min.js');?>"></script>
 <script src="<?=autov('/plugins/ipmi/js/parser-network.min.js');?>"></script>
+<script src="<?=autov('/webGui/javascript/jquery.switchbutton.js');?>"></script>
 <script>
 window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
 </script>

@@ -4,7 +4,7 @@ require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_config_store.php';
 /* read config files */
 $plg_path = IPMI_PLUGIN_CONFIG_DIR;
 $cfg_file = ipmi_plugin_config_path('ipmi.cfg');
-$cfg = ipmi_load_main_config();
+$cfg = ipmi_load_main_config(false);
 
 /* ipmi network options */
 $netsvc    = htmlspecialchars((string)ipmi_array_get($cfg, 'NETWORK', 'disable'));

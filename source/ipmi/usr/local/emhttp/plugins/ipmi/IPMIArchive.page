@@ -75,7 +75,7 @@ $(function(){
         sortReset: true,
         sortRestart : true,
         sortInitialOrder: 'asc',
-        widgets: ['saveSort', 'filter', 'stickyHeaders', 'zebra'],
+        widgets: ['saveSort', 'filter', 'stickyHeaders'],
         widgetOptions: {
             stickyHeaders_filteredToTop: true,
             filter_hideEmpty : true,
@@ -113,45 +113,52 @@ $(function(){
 
     archiveArray();
 
+    $('#allArchive').on('click', function() {
+        ArchiveDelete(0);
+    });
 });
 
-/* load ipmi archive table */
+/* load ipmi archive table (exposed for Event log when archive mode refreshes the archive view) */
+var ipmiArchiveLoadBusy = false;
+
 function archiveArray(){
-    $('#tblArchive tbody').html("<tr><td colspan='6'><br><i class='fa fa-spinner fa-spin icon'></i><em>Please wait, retrieving event information ...</em></td><tr>");
+    if (ipmiArchiveLoadBusy)
+        return;
+    ipmiArchiveLoadBusy = true;
+    $('#tblArchive tbody').html("<tr><td colspan='7'><br><i class='fa fa-spinner fa-spin icon'></i><em>Please wait, retrieving event information ...</em></td></tr>");
     ipmiPost('/plugins/ipmi/include/ipmi_helpers.php', {action:'ipmiarch'}, function(data) {
+        ipmiArchiveLoadBusy = false;
         $('#tblArchive tbody').empty();
+        var rows = [];
         $.each(data.Archives, function (i, archive) {
-            var Host = (typeof archive.IP == 'undefined') ? '' : archive.IP; // check if network was connection used
-            $('#tblArchive tbody')
-            .append('<tr id="'+i+'">'+
-            '<td title="'+ archive.State +'"><img src="/plugins/dynamix/images/'+ data.State[archive.State] +'-on.png"/></td>'+ //state
-            '<td class="network">'+ Host +'</td>'+ //archive host ip address
-            '<td>'+ archive.Date  +'</td>'+ //time stamp
-            '<td>'+ archive.Name  +'</td>'+ //sensor name
-            '<td>'+ archive.Type  +'</td>'+ //archive type
-            '<td>'+ archive.Event +'</td>'+ //archive description
+            var Host = (typeof archive.IP == 'undefined') ? '' : archive.IP;
+            rows.push('<tr id="'+i+'">'+
+            '<td title="'+ archive.State +'"><img src="/plugins/dynamix/images/'+ data.State[archive.State] +'-on.png" alt=""/></td>'+
+            '<td class="network">'+ Host +'</td>'+
+            '<td>'+ archive.Date  +'</td>'+
+            '<td>'+ archive.Name  +'</td>'+
+            '<td>'+ archive.Type  +'</td>'+
+            '<td>'+ archive.Event +'</td>'+
             '<td></td>'+
             '</tr>');
         });
+        $('#tblArchive tbody').append(rows.join(''));
 
         if(data.Network)
             $('.network').show();
         else
             $('.network').hide();
 
-        $('.delete-archive').click(function () {
-            ArchiveDelete($(this).parent().parent().attr('id'));
-        });
-
         var lastSearch = $('#tblArchive')[0].config.lastSearch;
         $('#tblArchive').trigger('update'); //update table for tablesorter
         $('#tblArchive').trigger('search', [lastSearch]);
-
-        $('#allArchive').click(function() {
-            ArchiveDelete(0);
-        });
+    }, function() {
+        ipmiArchiveLoadBusy = false;
+        $('#tblArchive tbody').html("<tr><td colspan='7'><em>Could not load archived events.</em></td></tr>");
     });
 }
+
+window.archiveArray = archiveArray;
 
 /* delete archive function */
 function ArchiveDelete(ID) {
@@ -165,9 +172,8 @@ function ArchiveDelete(ID) {
             closeOnConfirm: true,
         }, function() {
             ipmiPost(EventDelete, {event: ID}, function() {
-                $('#tblArchive tbody').empty();
-                }
-            );
+                archiveArray();
+            });
         });
     } else {
         var trID = $('#'+ID);

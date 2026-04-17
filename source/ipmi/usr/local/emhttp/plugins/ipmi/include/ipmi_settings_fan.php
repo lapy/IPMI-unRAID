@@ -4,7 +4,7 @@ require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_fan_profiles.php';
 
 /* fan control settings */
 $fancfg_file = "$plg_path/fan.cfg";
-$fancfg = ipmi_load_fan_config();
+$fancfg = ipmi_load_fan_config(false);
 $fanctrl    = htmlspecialchars((string)ipmi_array_get($fancfg, 'FANCONTROL', 'disable'));
 $fanpoll    = intval(ipmi_array_get($fancfg, 'FANPOLL', 6));
 $hddpoll    = intval(ipmi_array_get($fancfg, 'HDDPOLL', 18));
@@ -33,7 +33,7 @@ switch($board) {
 
     $board_file = "$plg_path/board.json";
     $board_file_status = file_exists($board_file);
-    $board_json = ipmi_load_board_config($board, $board_model);
+    $board_json = ipmi_load_board_config($board, $board_model, false);
     $fancfg = ipmi_normalize_asrock_fancfg($board, $board_model, $board_json, $fancfg);
     break;
     case  'Supermicro': 

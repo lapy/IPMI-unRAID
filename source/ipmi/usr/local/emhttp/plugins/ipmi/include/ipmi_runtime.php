@@ -206,10 +206,18 @@ function ipmi_write_pidfile($pidfile, $pid=null) {
 
 function ipmi_stop_service($pidfile) {
     $pid = ipmi_read_pidfile($pidfile);
-    if ($pid < 1)
+    if ($pid < 1) {
+        @unlink($pidfile);
         return false;
+    }
 
     exec('kill '.intval($pid), $output, $return_var);
+    /* Brief wait so we do not drop the pidfile while the process is still exiting */
+    for ($i = 0; $i < 25; $i++) {
+        if (!@file_exists('/proc/'.intval($pid)))
+            break;
+        usleep(200000);
+    }
     @unlink($pidfile);
     return ($return_var === 0);
 }
@@ -368,6 +376,10 @@ function ipmi_get_display_preferences() {
  * Matches the Unraid .page Cond on IPMIFans (override flag in ipmi.cfg or supported DMI manufacturer).
  */
 function ipmi_fan_control_menu_tab_visible() {
+    static $cached = null;
+    if ($cached !== null)
+        return $cached;
+
     $cfgfile = ipmi_plugin_config_path('ipmi.cfg');
     $override_cfg = false;
     if (is_readable($cfgfile)) {
@@ -379,7 +391,8 @@ function ipmi_fan_control_menu_tab_visible() {
     $manufacturer = trim((string)ipmi_read_dmi_field(2, 'Manufacturer'));
     $supported = ['ASRock' => true, 'ASRockRack' => true, 'Dell' => true, 'Supermicro' => true];
 
-    return $override_cfg || isset($supported[$manufacturer]);
+    $cached = $override_cfg || isset($supported[$manufacturer]);
+    return $cached;
 }
 
 function ipmi_daemon_running_flags() {

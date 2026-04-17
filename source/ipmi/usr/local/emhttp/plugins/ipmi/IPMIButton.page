@@ -20,12 +20,19 @@ Markdown="false"
 window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
 </script>
 <script src="<?=autov('/plugins/ipmi/js/ipmi-api.js');?>"></script>
+<script src="<?=autov('/plugins/ipmi/js/ipmi-monitor.js');?>"></script>
 <script>
-function ipmiTemp() {
-  ipmiPost('/plugins/ipmi/include/ipmi_temp.php',{unit:'<?=$display['unit']?>',dot:'<?=$display['number'][0]?>'},function(data) {
-    if (data.html) showFooter(data.html,'ipmitemps');
-    timers.ipmiTemp = setTimeout(ipmiTemp,20000);
-  });
+function ipmiFooterTemps() {
+  ipmiPost(
+    '/plugins/ipmi/include/ipmi_temp.php',
+    { unit: '<?=$display['unit']?>', dot: '<?=$display['number'][0]?>' },
+    function(data) {
+      if (data.html)
+        showFooter(data.html, 'ipmitemps');
+    },
+    function() { /* keep interval even on transient failures */ }
+  );
 }
-ipmiTemp();
+ipmiFooterTemps();
+IpmiMonitor.startIntervalWhenVisible(20000, ipmiFooterTemps);
 </script>

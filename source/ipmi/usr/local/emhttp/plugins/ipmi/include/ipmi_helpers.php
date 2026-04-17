@@ -5,9 +5,15 @@ require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_fan_profiles.php';
 require_once '/usr/local/emhttp/plugins/dynamix/include/Helpers.php';
 
 $action = htmlspecialchars((string)ipmi_array_get($_REQUEST, 'action', ''));
-$hdd_temp = get_highest_temp();
+$hdd_temp = null;
 $display = ipmi_get_display_preferences();
 $display_unit = ipmi_array_get($display, 'unit', 'C');
+
+function ipmi_ensure_hdd_temp_loaded() {
+    global $hdd_temp;
+    if ($hdd_temp === null)
+        $hdd_temp = get_highest_temp();
+}
 
 function ipmi_output_helper_response($payload) {
     if (strtoupper((string)ipmi_array_get($_SERVER, 'REQUEST_METHOD', 'GET')) === 'POST') {
@@ -71,9 +77,39 @@ function get_highest_temp(){
     return $return;
 }
 
+/**
+ * Drop sensors whose numeric ID appears in a comma-separated IGNORE list (matches ipmi-sensors -R semantics for typical configs).
+ */
+function ipmi_sensors_apply_ignore_list($sensors, $ignore) {
+    if (!is_array($sensors) || $sensors === [])
+        return [];
+    $ignore = trim((string)$ignore);
+    if ($ignore === '')
+        return $sensors;
+
+    $drop = [];
+    foreach (array_map('trim', explode(',', $ignore)) as $token) {
+        if ($token !== '')
+            $drop[$token] = true;
+    }
+    if (empty($drop))
+        return $sensors;
+
+    $out = [];
+    foreach ($sensors as $key => $sensor) {
+        $sid = (string)ipmi_array_get($sensor, 'ID', '');
+        if (isset($drop[$sid]))
+            continue;
+        $out[$key] = $sensor;
+    }
+    return $out;
+}
+
 /* get an array of all sensors and their values */
 function ipmi_sensors($ignore='') {
     global $ipmi, $netopts, $hdd_temp;
+
+    ipmi_ensure_hdd_temp_loaded();
 
     // return empty array if no ipmi detected and no network options
     if(!($ipmi || !empty($netopts)))
@@ -270,6 +306,8 @@ function get_content_from_github($repo, $file) {
 /* get fan and temp sensors array */
 function ipmi_fan_sensors($ignore=null) {
     global $ipmi, $fanopts, $hdd_temp;
+
+    ipmi_ensure_hdd_temp_loaded();
 
     // return empty array if no ipmi detected or network options
     if(!($ipmi || !empty($fanopts)))

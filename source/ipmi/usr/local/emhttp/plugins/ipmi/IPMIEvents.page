@@ -79,6 +79,16 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
 <script>
 $(function(){
     //event archive switch set cookie and toggle archive setting
+    function ipmiSetHostArchiveTabVisible(show) {
+        var $t = $('#tab3');
+        if (!$t.length)
+            return;
+        if ($('.tabs-container').length)
+            $t.toggle(show);
+        else
+            $t.parent().toggle(show);
+    }
+
     $('#event-arch').switchButton({
         labels_placement: 'left',
         on_label: 'Archive On',
@@ -87,13 +97,10 @@ $(function(){
     })
     .change(function () {
         $.cookie('ipmi_event_archive', $('#event-arch')[0].checked ? 1 : 0, { expires: 3650 });
-        if ($('.tabs-container').length) $('#tab3').toggle(); else $('#tab3').parent().toggle(); 
+        ipmiSetHostArchiveTabVisible($('#event-arch')[0].checked);
     });
 
-    if($.cookie('ipmi_event_archive') == 1)
-        if ($('.tabs-container').length) $('#tab3').show(); else $('#tab3').parent().show()
-    else
-        if ($('.tabs-container').length) $('#tab3').hide(); else $('#tab3').parent().hide();
+    ipmiSetHostArchiveTabVisible($.cookie('ipmi_event_archive') == 1);
 
     $('#tblEvent').tablesorter({
         sortList: [[2,1]],
@@ -138,44 +145,60 @@ $(function(){
     // add network class to ip address filter row cells
     $('#tblEvent tr.tablesorter-filter-row').children('td:nth-child(2)').addClass('network');
 
+    $(document).on('click', '#tblEvent .ipmi-row-delete', function() {
+        Delete($(this).data('event-id'));
+    });
+    $('#allEvents').on('click', function() {
+        Delete(0);
+    });
+
     eventArray();
 });
 
+var ipmiEventsLoadBusy = false;
+
+function ipmiRefreshArchiveTableIfPresent() {
+    if ($('#tblArchive').length && typeof window.archiveArray === 'function')
+        window.archiveArray();
+}
+
 /* load ipmi event table */
 function eventArray(){
+    if (ipmiEventsLoadBusy)
+        return;
+    ipmiEventsLoadBusy = true;
+    $('#tblEvent tbody').html("<tr><td colspan='8'><br><i class='fa fa-spinner fa-spin icon'></i><em>Loading events…</em></td></tr>");
     ipmiPost('/plugins/ipmi/include/ipmi_helpers.php', {action:'ipmievents'}, function(data) {
+        ipmiEventsLoadBusy = false;
+        $('#tblEvent tbody').empty();
+        var rows = [];
         $.each(data.Events, function (i, event) {
-            var Host = (typeof event.IP === 'undefined') ? '' : event.IP; // check if network connection was used
-            $('#tblEvent tbody')
-            .append('<tr id="'+i+'">'+
-            '<td title="'+ event.State +'"><i class="fa fa-circle orb '+ data.State[event.State] +'-orb middle"></td>'+ //state
-            '<td class="network">'+ Host +'</td>'+ //event host ip address
-            '<td>'+ event.ID    +'</td>'+ //event id
-            '<td>'+ event.Date  +'</td>'+ //time stamp
-            '<td>'+ event.Name  +'</td>'+ //sensor name
-            '<td>'+ event.Type  +'</td>'+ //event type
-            '<td>'+ event.Event +'</td>'+ //event description
-            '<td><a class="delete"><i class="fa fa-trash" title="delete"></i></a></td>'+ //delete icon
+            var Host = (typeof event.IP === 'undefined') ? '' : event.IP;
+            rows.push('<tr id="'+i+'">'+
+            '<td title="'+ event.State +'"><i class="fa fa-circle orb '+ data.State[event.State] +'-orb middle"></td>'+
+            '<td class="network">'+ Host +'</td>'+
+            '<td>'+ event.ID    +'</td>'+
+            '<td>'+ event.Date  +'</td>'+
+            '<td>'+ event.Name  +'</td>'+
+            '<td>'+ event.Type  +'</td>'+
+            '<td>'+ event.Event +'</td>'+
+            '<td><button type="button" class="ipmi-table-action ipmi-row-delete" data-event-id="'+i+'" title="Delete event"><i class="fa fa-trash" aria-hidden="true"></i></button></td>'+
             '</tr>');
         });
+        $('#tblEvent tbody').append(rows.join(''));
 
         if(data.Network)
             $('.network').show();
         else
             $('.network').hide();
 
-        $('.delete').click(function () {
-            Delete($(this).parent().parent().attr('id'));
-        });
-
         // restore filters and update table for tablesorter
         var lastSearch = $('#tblEvent')[0].config.lastSearch;
         $('#tblEvent').trigger('update');
         $('#tblEvent').trigger('search', [lastSearch]);
-
-        $('#allEvents').click(function() {
-            Delete(0);
-        });
+    }, function() {
+        ipmiEventsLoadBusy = false;
+        $('#tblEvent tbody').html("<tr><td colspan='8'><em>Could not load events.</em></td></tr>");
     });
 }
 
@@ -193,9 +216,8 @@ function Delete(ID) {
         }, function() {
             ipmiPost(EventDelete, {archive: Archive, event: ID}, function() {
                 $('#tblEvent tbody').empty();
-                if(Archive == 1){
-                    archiveArray();
-                }
+                if (Archive == 1)
+                    ipmiRefreshArchiveTableIfPresent();
             });
         });
     } else {
@@ -212,9 +234,8 @@ function Delete(ID) {
                     trID.remove();
                     $('#tblEvent').trigger('update');
                 });
-            if(Archive == 1){
-                archiveArray();
-            }
+            if (Archive == 1)
+                ipmiRefreshArchiveTableIfPresent();
         });
     }
 }

@@ -71,18 +71,7 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
         </section>
     </div>
 
-    <div class="ipmi-hub-strip">
-        <nav class="ipmi-hub-strip__nav" aria-label="IPMI areas">
-            <a class="ipmi-hub-strip__link" href="/Settings/IPMITools" data-ipmi-tools-tab="tab1">Sensors</a>
-            <a class="ipmi-hub-strip__link" href="/Settings/IPMITools" data-ipmi-tools-tab="tab2">Event log</a>
-            <a class="ipmi-hub-strip__link" href="/Settings/IPMITools" data-ipmi-tools-tab="tab3">Archived events</a>
-            <?php if ($ipmi_fan_menu_visible): ?>
-            <a class="ipmi-hub-strip__link" href="/Settings/IPMI" data-ipmi-settings-tab="tab2">Fan control</a>
-            <?php endif; ?>
-            <a class="ipmi-hub-strip__link" href="/Settings/IPMI" data-ipmi-settings-tab="tab3">Config editor</a>
-            <button type="button" class="ipmi-hub-strip__link ipmi-hub-strip__btn" id="ipmi-diag-export" title="Download redacted ipmi.cfg, fan.cfg, and board.json">Export diagnostics</button>
-        </nav>
-    </div>
+    <?php ipmi_render_quick_nav_strip('settings', ['show_fan' => $ipmi_fan_menu_visible]); ?>
 
     <?php if (!$ipmi_fan_menu_visible): ?>
     <div class="ipmi-alert ipmi-alert--info" style="margin-bottom:var(--ipmi-space-5);">
@@ -91,10 +80,10 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
     <?php endif; ?>
 
     <nav class="ipmi-anchor-nav" aria-label="On this page">
-        <a href="#ipmi-section-connection">Connection</a>
-        <a href="#ipmi-section-events">Events</a>
-        <a href="#ipmi-section-display">Display</a>
-        <a href="#ipmi-section-footer">Footer</a>
+        <button type="button" class="ipmi-anchor-nav__link" data-ipmi-scroll-target="ipmi-section-connection">Connection</button>
+        <button type="button" class="ipmi-anchor-nav__link" data-ipmi-scroll-target="ipmi-section-events">Events</button>
+        <button type="button" class="ipmi-anchor-nav__link" data-ipmi-scroll-target="ipmi-section-display">Display</button>
+        <button type="button" class="ipmi-anchor-nav__link" data-ipmi-scroll-target="ipmi-section-footer">Footer</button>
     </nav>
 
     <section class="ipmi-section-card" id="ipmi-section-connection">
@@ -409,10 +398,6 @@ $(function(){
         }, { button: btn });
     });
 
-    $('#ipmi-diag-export').on('click', function() {
-        ipmiSubmitToolDownload('diag_download');
-    });
-
     $('#tab5').click(function() {
         $.cookie('one', 'tab1', { expires:null, path: '/'});
         location = '/Settings/IPMITools';
@@ -436,6 +421,13 @@ $(function(){
 
     $('#LOCAL').change(checkLOCAL);
     checkLOCAL();
+
+    $('.ipmi-anchor-nav').on('click', '[data-ipmi-scroll-target]', function() {
+        var id = $(this).data('ipmi-scroll-target');
+        var el = id ? document.getElementById(id) : null;
+        if (el)
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
 
     decData();
 });

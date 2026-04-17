@@ -64,6 +64,11 @@ function ipmiQuickNavInit() {
     if (tab && typeof $.cookie === 'function')
       $.cookie('one', tab, { expires: null, path: '/' });
   });
+
+  $(document).on('click', '#ipmi-diag-export', function(e) {
+    e.preventDefault();
+    ipmiSubmitToolDownload('diag_download');
+  });
 }
 
 function ipmiPost(path, payload, onSuccess, onError, options) {

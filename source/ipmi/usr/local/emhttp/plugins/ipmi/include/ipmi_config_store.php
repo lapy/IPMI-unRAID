@@ -70,25 +70,25 @@ function ipmi_ini_to_string($config) {
     return implode(PHP_EOL, $lines).PHP_EOL;
 }
 
-function ipmi_load_main_config() {
+function ipmi_load_main_config($persist_normalized = true) {
     $path = ipmi_plugin_config_path('ipmi.cfg');
     $config = ipmi_read_ini_config($path);
     $defaults = ipmi_main_config_defaults();
     $normalized = ipmi_ini_normalize($config, $defaults);
 
-    if ($normalized !== $config)
+    if ($persist_normalized && $normalized !== $config)
         ipmi_atomic_write($path, ipmi_ini_to_string($normalized));
 
     return $normalized;
 }
 
-function ipmi_load_fan_config() {
+function ipmi_load_fan_config($persist_normalized = true) {
     $path = ipmi_plugin_config_path('fan.cfg');
     $config = ipmi_read_ini_config($path);
     $defaults = ipmi_fan_config_defaults();
     $normalized = ipmi_ini_normalize($config, $defaults);
 
-    if ($normalized !== $config)
+    if ($persist_normalized && $normalized !== $config)
         ipmi_atomic_write($path, ipmi_ini_to_string($normalized));
 
     return $normalized;
@@ -123,7 +123,7 @@ function ipmi_normalize_board_config($board, $board_model, $board_json) {
     return array_merge(['schema_version' => IPMI_BOARD_CONFIG_SCHEMA_VERSION], $entries);
 }
 
-function ipmi_load_board_config($board, $board_model) {
+function ipmi_load_board_config($board, $board_model, $persist_normalized = true) {
     $path = ipmi_plugin_config_path('board.json');
     $board_json = ipmi_read_json_config($path);
 
@@ -131,7 +131,7 @@ function ipmi_load_board_config($board, $board_model) {
         return [];
 
     $normalized = ipmi_normalize_board_config($board, $board_model, $board_json);
-    if ($normalized !== $board_json)
+    if ($persist_normalized && $normalized !== $board_json)
         ipmi_save_board_config($normalized);
 
     return $normalized;

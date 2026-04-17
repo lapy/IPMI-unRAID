@@ -68,8 +68,12 @@ $ipmi_fan_menu_visible = ipmi_fan_control_menu_tab_visible();
 window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
 </script>
 <script src="<?=autov('/plugins/ipmi/js/ipmi-api.js');?>"></script>
+<script src="<?=autov('/plugins/ipmi/js/ipmi-monitor.js');?>"></script>
 
 <script>
+var ipmiDisplayUnitF = ('<?=htmlspecialchars($display['unit']);?>' === 'F');
+var ipmiSensorFetchBusy = false;
+
 $(function(){
 
     <?php if (function_exists('plugin_update_available') && $version = plugin_update_available('ipmi')): ?>
@@ -110,11 +114,11 @@ $(function(){
                 '.filter-type' : true,
                 '.filter-reading' : {
                     'nominal'  : function(e, n, f, i, $r, c, data) {
-                        return (data.$row.find('td.reading font').prop('color') == 'green'); },
+                        return $r.find('td.reading .ipmi-reading').hasClass('ipmi-reading--nominal'); },
                     'warning'  : function(e, n, f, i, $r, c, data) {
-                        return (data.$row.find('td.reading font').prop('color') == 'orange'); },
+                        return $r.find('td.reading .ipmi-reading').hasClass('ipmi-reading--warn'); },
                     'critical' : function(e, n, f, i, $r, c, data) {
-                        return (data.$row.find('td.reading font').prop('color') == 'red'); }
+                        return $r.find('td.reading .ipmi-reading').hasClass('ipmi-reading--critical'); }
                 }
             }
         }
@@ -130,123 +134,63 @@ $(function(){
     });
 
     sensorArray(false);
-    setTimeout(sensorRefresh, 20000);
+    IpmiMonitor.startIntervalWhenVisible(20000, function() {
+        sensorArray(true);
+    });
 
 });
 
-/* sensor refresh */
-function sensorRefresh() {
-    sensorArray(true);
-    setTimeout(sensorRefresh, 20000);
-};
-
 /* load ipmi sensor table */
 function sensorArray(Refresh){
+    if (ipmiSensorFetchBusy)
+        return;
+    ipmiSensorFetchBusy = true;
     ipmiPost('/plugins/ipmi/include/ipmi_helpers.php', {action:'ipmisensors'}, function(data) {
-        $.each(data.Sensors, function (i, sensor) {
-            var LowerNR = parseFloat(sensor.LowerNR);
-            var LowerC  = parseFloat(sensor.LowerC);
-            var LowerNC = parseFloat(sensor.LowerNC);
-            var UpperNC = parseFloat(sensor.UpperNC);
-            var UpperC  = parseFloat(sensor.UpperC);
-            var UpperNR = parseFloat(sensor.UpperNR);
-            var Color   = 'green';
-            var Units   = '';
-
-            // only process sensor if reading is valid
-            if (sensor.Reading != 'N/A'){
-                var Reading = parseFloat(sensor.Reading);
-                if (sensor.Type == 'Voltage'){
-                    Units += ' ';
-
-                    // if voltage is less than lower non-critical
-                    // or voltage is greater than upper non-critical show critical
-                    if (Reading < LowerNC && Reading > UpperNC)
-                        Color = 'orange';
-
-                    // if voltage is less than lower critical
-                    // or voltage is greater than upper critical show non-recoverable
-                    if (Reading < LowerC || Reading > UpperC)
-                        Color = 'red';
-
-                } else if (sensor.Type == 'Fan'){
-                    Units += ' ';
-
-                    // if Fan RPMs are less than lower non-critical
-                    if (Reading < LowerNC || Reading < LowerC || Reading < LowerNR)
-                        Color = "red";
-
-                } else if(sensor.Type == 'Temperature'){
-
-                    // if temperature is greater than upper non-critical show critical
-                    if (Reading > UpperNC)
-                        Color = 'orange';
-
-                    // if temperature is greater than upper critical show non-recoverable
-                    if (Reading > UpperC)
-                        Color = 'red';
-
-                    if('<?=$display['unit']?>' === 'F') {
-                        sensor.Units = 'F';
-                        Reading = Math.round(9/5 * Reading + 32);
-                    }
-                    Units += '&deg;';
-
-                }
-                Units += sensor.Units;
-            }else {
-                Color = 'blue'; // reading equals N/A
-                if(sensor.Type == 'OEM Reserved'){
-                    var Reading = sensor.Event;
-                    if(Reading == 'Low')
-                        Color = 'green';
-                    if(Reading == 'Medium')
-                        Color = 'orange';
-                    if(Reading == 'High')
-                        Color = 'red';
-                }else{
-                    var Reading = sensor.Reading;
-                }
-            }
-
-            if(Refresh) {
-                $('#'+i+' td.reading').html('<font color="'+ Color + '">'+ Reading + Units +'</font>');
-            } else {
-                var Host = (typeof sensor.IP == 'undefined') ? '' : sensor.IP; // check for ip
-                $('#tblSensor tbody')
-                .append('<tr id="'+i+'">'+
-                '<td title="'+sensor.State+'"><i class="fa fa-circle orb '+ data.State[sensor.State] +'-orb middle"></i></td>'+ //state
-                '<td class="network">' +Host+'</td>'+ // sensor host ip address
-                '<td class="advanced">'+ sensor.ID      +'</td>'+ // sensor id
-                '<td>'+sensor.Name+'</td>'+ //sensor name
-                '<td class="advanced">'+ sensor.LowerNR +'</td>'+ // lower non recoverable
-                '<td class="advanced">'+ sensor.LowerC  +'</td>'+ // lower critical
-                '<td class="advanced">'+ sensor.LowerNC +'</td>'+ // lower non critical
-                '<td class="reading">' + '<font color="'+ Color + '">'+ Reading + Units +'</font></td>'+ //sensor reading
-                '<td>'+sensor.Type+'</td>'+ //sensor type
-                '<td class="advanced">'+ sensor.UpperNC +'</td>'+ // upper non critical
-                '<td class="advanced">'+ sensor.UpperC  +'</td>'+ // upper critical
-                '<td class="advanced">'+ sensor.UpperNR +'</td>'+ // upper non recoverable
-                '</tr>');
-            }
-        });
-        if (!Refresh) {
-            if(data.Network)
-                $('.network').show();
-            else
-                $('.network').hide();
-
-            if ($('#advancedview')[0].checked)
-                $('.advanced').show();
-            else
-                $('.advanced').hide();
-
-            // restore filters and update table for tablesorter
-            var lastSearch = $('#tblSensor')[0].config.lastSearch;
-            $('#tblSensor').trigger('update');
-            $('#tblSensor').trigger('search', [lastSearch]);
+        ipmiSensorFetchBusy = false;
+        var unitF = ipmiDisplayUnitF;
+        if (Refresh) {
+            $.each(data.Sensors, function (i, sensor) {
+                $('#'+i+' td.reading').html(IpmiMonitor.readingMarkup(sensor, unitF));
+            });
+            return;
         }
+        var rows = [];
+        $.each(data.Sensors, function (i, sensor) {
+            var Host = (typeof sensor.IP === 'undefined') ? '' : sensor.IP;
+            var rm = IpmiMonitor.readingMarkup(sensor, unitF);
+            rows.push('<tr id="'+i+'">'+
+                '<td title="'+sensor.State+'"><i class="fa fa-circle orb '+ data.State[sensor.State] +'-orb middle"></i></td>'+
+                '<td class="network">' +Host+'</td>'+
+                '<td class="advanced">'+ sensor.ID      +'</td>'+
+                '<td>'+sensor.Name+'</td>'+
+                '<td class="advanced">'+ sensor.LowerNR +'</td>'+
+                '<td class="advanced">'+ sensor.LowerC  +'</td>'+
+                '<td class="advanced">'+ sensor.LowerNC +'</td>'+
+                '<td class="reading">' + rm + '</td>'+
+                '<td>'+sensor.Type+'</td>'+
+                '<td class="advanced">'+ sensor.UpperNC +'</td>'+
+                '<td class="advanced">'+ sensor.UpperC  +'</td>'+
+                '<td class="advanced">'+ sensor.UpperNR +'</td>'+
+                '</tr>');
+        });
+        $('#tblSensor tbody').append(rows.join(''));
+
+        if(data.Network)
+            $('.network').show();
+        else
+            $('.network').hide();
+
+        if ($('#advancedview')[0].checked)
+            $('.advanced').show();
+        else
+            $('.advanced').hide();
+
+        var lastSearch = $('#tblSensor')[0].config.lastSearch;
+        $('#tblSensor').trigger('update');
+        $('#tblSensor').trigger('search', [lastSearch]);
+    }, function() {
+        ipmiSensorFetchBusy = false;
     });
-};
+}
 
 </script>

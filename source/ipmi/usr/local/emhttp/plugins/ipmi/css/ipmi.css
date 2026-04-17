@@ -60,6 +60,26 @@ body.azure.dark {
     font-weight: 700;
 }
 
+.ipmi-reading {
+    font-weight: 700;
+}
+
+.ipmi-reading--nominal {
+    color: var(--ipmi-color-success);
+}
+
+.ipmi-reading--warn {
+    color: var(--ipmi-color-warning);
+}
+
+.ipmi-reading--critical {
+    color: var(--ipmi-color-danger);
+}
+
+.ipmi-reading--na {
+    color: var(--ipmi-color-info);
+}
+
 #settings,
 .fanlog-a {
     cursor: pointer;
@@ -195,6 +215,29 @@ select.display {
 .ipmi-hero-stat__value {
     font-size: 17px;
     font-weight: 700;
+}
+
+/* Daemon Running/Stopped in hero aside — avoid Unraid .green/.orange (low contrast on gradient + glass). */
+.ipmi-shell .ipmi-text-status {
+    font-weight: 800;
+}
+
+.ipmi-shell .ipmi-text-status--running {
+    color: var(--ipmi-color-success);
+}
+
+.ipmi-shell .ipmi-text-status--stopped {
+    color: var(--ipmi-color-warning);
+}
+
+.ipmi-page-hero .ipmi-text-status--running {
+    color: #bbf7d0;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.ipmi-page-hero .ipmi-text-status--stopped {
+    color: #fde68a;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 .ipmi-summary-grid,
@@ -456,6 +499,97 @@ select.display {
     color: var(--ipmi-color-danger);
 }
 
+/* Unified application nav (workspaces + context) */
+.ipmi-app-nav {
+    margin: 0 0 var(--ipmi-space-5);
+    padding: var(--ipmi-space-4) var(--ipmi-space-5);
+    border-radius: var(--ipmi-radius-md);
+    border: 1px solid var(--ipmi-color-border);
+    background: var(--ipmi-color-surface);
+    box-shadow: var(--ipmi-shadow-sm);
+}
+
+.ipmi-app-nav__top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--ipmi-space-3);
+    margin-bottom: var(--ipmi-space-3);
+    padding-bottom: var(--ipmi-space-3);
+    border-bottom: 1px solid var(--ipmi-color-border);
+}
+
+.ipmi-app-nav__workspaces {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ipmi-space-2);
+}
+
+.ipmi-app-nav__workspace {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--ipmi-color-border);
+    background: var(--ipmi-color-surface-soft);
+    color: var(--ipmi-color-primary);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    letter-spacing: 0.02em;
+}
+
+.ipmi-app-nav__workspace.is-active {
+    background: var(--ipmi-color-primary-soft);
+    color: var(--ipmi-color-text);
+    border-color: rgba(25, 118, 210, 0.35);
+}
+
+.ipmi-app-nav__export {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--ipmi-color-border);
+    background: var(--ipmi-color-surface-soft);
+    color: var(--ipmi-color-text);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.ipmi-app-nav__export:hover {
+    border-color: var(--ipmi-color-primary);
+    color: var(--ipmi-color-primary);
+}
+
+.ipmi-app-nav__context {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ipmi-space-2) var(--ipmi-space-4);
+}
+
+.ipmi-app-nav__link {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ipmi-color-primary);
+    text-decoration: none;
+}
+
+.ipmi-app-nav__link.is-active {
+    color: var(--ipmi-color-text);
+    text-decoration: underline;
+}
+
+.ipmi-app-nav__hint {
+    font-size: 13px;
+    color: var(--ipmi-color-text-soft);
+}
+
 .ipmi-hub-strip {
     margin: 0 0 var(--ipmi-space-5);
     padding: var(--ipmi-space-4) var(--ipmi-space-5);
@@ -507,11 +641,27 @@ select.display {
     backdrop-filter: blur(10px);
 }
 
-.ipmi-anchor-nav a {
+.ipmi-anchor-nav a,
+.ipmi-anchor-nav__link {
     font-size: 13px;
     font-weight: 600;
     color: var(--ipmi-color-primary);
     text-decoration: none;
+}
+
+.ipmi-anchor-nav__link {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.ipmi-anchor-nav__link:hover,
+.ipmi-anchor-nav__link:focus-visible {
+    text-decoration: underline;
+    outline: none;
 }
 
 .ipmi-quick-nav {

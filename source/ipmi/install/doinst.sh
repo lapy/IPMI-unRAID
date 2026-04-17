@@ -23,17 +23,17 @@ chmod +0755 /usr/local/emhttp/plugins/ipmi/scripts/* \
 ###Stop Scripts###
 
 # Add stop script to rc.local_shutdown script
-if ! grep "$RC_SCRIPT" $SD_RCFILE >/dev/null 2>&1
-    then echo -e "\n[ -x $RC_SCRIPT ] && $RC_SCRIPT stop" >> $SD_RCFILE
+if ! grep "$RC_SCRIPT" "$SD_RCFILE" >/dev/null 2>&1
+    then printf '\n[ -x %s ] && %s stop\n' "$RC_SCRIPT" "$RC_SCRIPT" >> "$SD_RCFILE"
 fi
 
 # Add stop script to rc.local_shutdown script
-if ! grep "$RC_SCRIPT2" $SD_RCFILE >/dev/null 2>&1
-    then echo -e "\n[ -x $RC_SCRIPT2 ] && $RC_SCRIPT2 stop" >> $SD_RCFILE
+if ! grep "$RC_SCRIPT2" "$SD_RCFILE" >/dev/null 2>&1
+    then printf '\n[ -x %s ] && %s stop\n' "$RC_SCRIPT2" "$RC_SCRIPT2" >> "$SD_RCFILE"
 fi
 
 # Add stop script to rc.local_shutdown script
-if ! grep "$RC_SCRIPT3" $SD_RCFILE >/dev/null 2>&1
-    then echo -e "\n[ -x $RC_SCRIPT3 ] && $RC_SCRIPT3 --quit" >> $SD_RCFILE
+if ! grep "$RC_SCRIPT3" "$SD_RCFILE" >/dev/null 2>&1
+    then printf '\n[ -x %s ] && %s --quit\n' "$RC_SCRIPT3" "$RC_SCRIPT3" >> "$SD_RCFILE"
 fi
-[ ! -x $SD_RCFILE ] && chmod u+x $SD_RCFILE
+[ ! -x "$SD_RCFILE" ] && chmod u+x "$SD_RCFILE"

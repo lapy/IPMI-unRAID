@@ -360,9 +360,6 @@ function ipmi_validate_csrf_token($token) {
 }
 
 function ipmi_request_has_prevalidated_csrf() {
-    if (PHP_SAPI === 'cli')
-        return false;
-
     if (strtoupper((string)ipmi_array_get($_SERVER, 'REQUEST_METHOD', 'GET')) !== 'POST')
         return false;
 

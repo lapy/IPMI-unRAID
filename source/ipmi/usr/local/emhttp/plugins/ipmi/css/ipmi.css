@@ -35,6 +35,84 @@ input[type="password"].ipmi-password {
 select.display {
     min-width: 220px;
 }
+
+.ipmi-summary-grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    margin: 12px 0 20px;
+}
+
+.ipmi-summary-card,
+.ipmi-fan-card {
+    border: 1px solid rgba(127, 140, 141, 0.35);
+    border-radius: 10px;
+    padding: 14px 16px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+}
+
+.ipmi-summary-card h4,
+.ipmi-fan-card h4 {
+    margin: 0 0 10px;
+}
+
+.ipmi-summary-card p {
+    margin: 6px 0;
+}
+
+.ipmi-fan-card {
+    margin: 14px 0;
+}
+
+.ipmi-fan-card.needs-mapping {
+    border-color: rgba(231, 76, 60, 0.55);
+}
+
+.ipmi-fan-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.ipmi-fan-card-status {
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.ipmi-fan-card-status.ok {
+    background: rgba(39, 174, 96, 0.18);
+    color: #2ecc71;
+}
+
+.ipmi-fan-card-status.warn {
+    background: rgba(231, 76, 60, 0.16);
+    color: #e74c3c;
+}
+
+.ipmi-fan-card-summary {
+    margin-bottom: 8px;
+}
+
+.ipmi-fan-card-summary dl,
+.ipmi-fan-card-controls dl {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+.ipmi-fan-card-controls {
+    border-top: 1px solid rgba(127, 140, 141, 0.2);
+    padding-top: 10px;
+}
+
+.ipmi-fan-summary dd {
+    display: block;
+}
 /* filters */
 select .tablesorter input.tablesorter-filter,
 .tablesorter select.tablesorter-filter {

@@ -1,37 +1,39 @@
-<?
+<?php
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_options.php';
 
-$cmd     = '/usr/sbin/ipmi-sel --comma-separated-output --output-event-state --no-header-output --interpret-oem-data ';
-$log     = '/boot/config/plugins/ipmi/archived_events.log';
-$event   = htmlspecialchars($_GET['event']);
-$archive = intval($_GET['archive']);
+ipmi_require_post_request();
+ipmi_require_csrf();
 
-/* network options */
-if($netsvc === 'enable') {
-    if($event){
+$cmd = '/usr/sbin/ipmi-sel --comma-separated-output --output-event-state --no-header-output --interpret-oem-data ';
+$log = ipmi_plugin_config_path('archived_events.log');
+$event = htmlspecialchars((string)ipmi_array_get($_POST, 'event', ''));
+$archive = intval(ipmi_array_get($_POST, 'archive', 0));
+$options = '';
+
+if ($netsvc === 'enable') {
+    if ($event) {
         $id = explode('_', $event);
-        $event = $id[1];
-        $options = ' -h '.escapeshellarg(long2ip($id[0]));
-    }else
+        $event = ipmi_array_get($id, 1, '');
+        $options = ' -h '.escapeshellarg(long2ip(intval(ipmi_array_get($id, 0, 0))));
+    } else
         $options = ' -h '.escapeshellarg($ipaddr);
 
     $options .= ' -u '.escapeshellarg($user).' -p '.escapeshellarg(base64_decode($password)).' --always-prefix --session-timeout=5000 --retransmission-timeout=1000 ';
 }
 
-/* archive */
-if($archive) {
-    if($event)
-        $append = '--display='.intval($event).$options;
-    else
-        $append = $options;
-
-    file_put_contents($log, shell_exec($cmd.$append),FILE_APPEND);
+if ($archive) {
+    $append = $event ? '--display='.intval($event).$options : $options;
+    $archive_result = ipmi_run_command($cmd.$append);
+    if (!empty($archive_result['text']))
+        file_put_contents($log, $archive_result['text'].PHP_EOL, FILE_APPEND);
 }
 
-if($event)
-    $options = '--delete='.intval($event).$options;
-else
-    $options = '--clear '.$options;
+$delete_options = $event ? '--delete='.intval($event).$options : '--clear '.$options;
+$delete_result = ipmi_run_command($cmd.$delete_options);
+if (!$delete_result['success'])
+    ipmi_json_response(false, 'Unable to delete IPMI events.', [], [$delete_result['text']]);
 
-shell_exec($cmd.$options);
-?>
+ipmi_json_response(true, 'IPMI events updated.', [
+    'archived' => (bool)$archive,
+    'event' => $event,
+]);

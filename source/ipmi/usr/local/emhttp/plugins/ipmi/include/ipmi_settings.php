@@ -1,18 +1,18 @@
-<?
+<?php
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_helpers.php';
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_settings_display.php';
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_settings_fan.php';
 
 /* ipmi settings variables*/
-$seld     = isset($cfg['IPMISELD']) ? htmlspecialchars($cfg['IPMISELD']) : 'disable';
-$seldpoll = isset($cfg['IPMIPOLL']) ? intval($cfg['IPMIPOLL'])           : 60;
-$local    = isset($cfg['LOCAL'])    ? htmlspecialchars($cfg['LOCAL'])    : 'disable';
-$dash     = isset($cfg['DASH'])     ? htmlspecialchars($cfg['DASH'])     : 'disable';
-$loadcfg  = isset($cfg['LOADCFG'])  ? $cfg['LOADCFG']                    : 'disable';
+$seld     = htmlspecialchars((string)ipmi_array_get($cfg, 'IPMISELD', 'disable'));
+$seldpoll = intval(ipmi_array_get($cfg, 'IPMIPOLL', 60));
+$local    = htmlspecialchars((string)ipmi_array_get($cfg, 'LOCAL', 'disable'));
+$dash     = htmlspecialchars((string)ipmi_array_get($cfg, 'DASH', 'disable'));
+$loadcfg  = (string)ipmi_array_get($cfg, 'LOADCFG', 'disable');
 
 // check running status
-$seld_run       = (intval(trim(shell_exec( "[ -f /proc/`cat /var/run/ipmiseld.pid 2> /dev/null`/exe ] && echo 1 || echo 0 2> /dev/null" ))) === 1);
-$fanctrl_run    = (intval(trim(shell_exec( "[ -f /proc/`cat /var/run/ipmifan.pid 2> /dev/null`/exe ] && echo 1 || echo 0 2> /dev/null" ))) === 1);
+$seld_run       = ipmi_is_service_running('/var/run/ipmiseld.pid');
+$fanctrl_run    = ipmi_is_service_running('/var/run/ipmifan.pid');
 $running        = "<span class='green'>Running</span>";
 $stopped        = "<span class='orange'>Stopped</span>";
 $seld_status    = ($seld_run)    ? $running : $stopped;

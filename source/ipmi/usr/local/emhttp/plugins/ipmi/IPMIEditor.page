@@ -79,6 +79,10 @@ Markdown="false"
 <script src="<?=autov('/plugins/ipmi/js/codemirror/anyword-hint.min.js');?>"></script>
 <script src="<?=autov('/plugins/ipmi/js/codemirror/searchcursor.min.js');?>"></script>
 <script src="<?=autov('/plugins/ipmi/js/codemirror/search.min.js');?>"></script>
+<script>
+window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
+</script>
+<script src="<?=autov('/plugins/ipmi/js/ipmi-api.js');?>"></script>
 
 <script>
 $(function(){
@@ -111,9 +115,9 @@ $(function(){
 
         if (Config != -1){
             $('#ipmiconfig').val(Config);
-            $.post('/plugins/ipmi/include/ipmi_config.php', {ipmicfg:null, config:Config, csrf_token:"<?=$var['csrf_token']?>"}, function (data) {
-                    editor.setValue(data.config);
-                },'json'
+            ipmiPost('/plugins/ipmi/include/ipmi_config.php', {ipmicfg:null, config:Config}, function (data) {
+                    editor.setValue(data.config || '');
+                }
             );
         }else{
             editor.setValue('');
@@ -150,36 +154,26 @@ function commitConfig() {
     var Config = $('#editfile')[0].selectedIndex -1;
     if (Config != -1){
         $('#ipmiconfig').val(Config);
-        $.post('/plugins/ipmi/include/ipmi_config.php', $('#cfgform').serializeArray(),function (data) {
-            var Title = 'IPMI Sensors Configuration';
-
-            if(data.success){
-                swal({title:Title,text:'saved',type:'success',closeOnConfirm: true,},function() {
-                    location = '/Settings/IPMI';
-                });
-            }else{
-                swal({title:Title,text:data.error.join("\n"),type:'error'});
-            }
-        }, 'json');
+        ipmiPost('/plugins/ipmi/include/ipmi_config.php', $('#cfgform').serializeArray(),function (data, response) {
+            swal({title:'IPMI Sensors Configuration',text:response.message || 'saved',type:'success',closeOnConfirm: true,},function() {
+                location = '/Settings/IPMI';
+            });
+        }, function(response) {
+            swal({title:'IPMI Sensors Configuration',text:ipmiResponseText(response),type:'error'});
+        });
     }
 }
 
 function revertConfig() {
     var Config = $('#editfile')[0].selectedIndex -1;
     if (Config != -1){
-        $.post('/plugins/ipmi/include/ipmi_config.php', {ipmicfg:null, config:Config, csrf_token:"<?=$var['csrf_token']?>"}, function (data) {
-            var Title = 'IPMI Sensors Configuration';
-
-            if(data.success){
-                swal({title:Title,text:'reloaded from bmc',type:'success',closeOnConfirm: true,},function() {
-                    location.reload(true);
-                });
-            }
-
-            if(data.error)
-                swal({title:Title,text:data.error,type:'error'});
-
-        }, 'json');
+        ipmiPost('/plugins/ipmi/include/ipmi_config.php', {ipmicfg:null, config:Config}, function (data, response) {
+            swal({title:'IPMI Sensors Configuration',text:response.message || 'reloaded from bmc',type:'success',closeOnConfirm: true,},function() {
+                location.reload(true);
+            });
+        }, function(response) {
+            swal({title:'IPMI Sensors Configuration',text:ipmiResponseText(response),type:'error'});
+        });
     }
 }
 

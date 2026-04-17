@@ -54,6 +54,10 @@ table.tablesorter tbody tr:nth-child(even) {
 <script src="<?=autov('/plugins/ipmi/js/jquery.tablesorter.combined.min.js');?>"></script>
 <script src="<?=autov('/plugins/ipmi/js/jquery.tablesorter.pager.min.js');?>"></script>
 <script src="<?=autov('/webGui/javascript/jquery.switchbutton.js');?>"></script>
+<script>
+window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
+</script>
+<script src="<?=autov('/plugins/ipmi/js/ipmi-api.js');?>"></script>
 
 <script>
 $(function(){
@@ -64,12 +68,12 @@ $(function(){
         $('.tabs').append('<div class="tab"><input type="radio" name="tabs2" id="tab4"><label for="tab4"><i class="icon fa fa-cog"></i>Settings</label></div>');
     }
 
-    <?if (function_exists('plugin_update_available') && $version = plugin_update_available('ipmi')):?>
+    <?php if (function_exists('plugin_update_available') && $version = plugin_update_available('ipmi')): ?>
         showNotice('IPMI <?=$version?> available. <a>Update</a>','ipmi');
         $('#user-notice a').on('click', function () {
             $('#user-notice').empty();
         });
-    <?endif;?>
+    <?php endif; ?>
 
     $('.settings').click(function() {
         $.cookie('one', 'tab1', { expires:null, path: '/'});
@@ -144,7 +148,7 @@ function sensorRefresh() {
 
 /* load ipmi sensor table */
 function sensorArray(Refresh){
-    $.getJSON('/plugins/ipmi/include/ipmi_helpers.php', {action:'ipmisensors'}, function(data) {
+    ipmiPost('/plugins/ipmi/include/ipmi_helpers.php', {action:'ipmisensors'}, function(data) {
         $.each(data.Sensors, function (i, sensor) {
             var LowerNR = parseFloat(sensor.LowerNR);
             var LowerC  = parseFloat(sensor.LowerC);

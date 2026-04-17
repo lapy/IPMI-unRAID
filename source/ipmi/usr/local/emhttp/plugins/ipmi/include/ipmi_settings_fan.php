@@ -1,18 +1,21 @@
-<?
+<?php
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_check.php';
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_fan_profiles.php';
 
 /* fan control settings */
 $fancfg_file = "$plg_path/fan.cfg";
-if (file_exists($fancfg_file))
-    $fancfg = parse_ini_file($fancfg_file);
-$fanctrl    = isset($fancfg['FANCONTROL']) ? htmlspecialchars($fancfg['FANCONTROL']) :'disable';
-$fanpoll    = isset($fancfg['FANPOLL'])    ? intval($fancfg['FANPOLL'])              : 6;
-$hddpoll    = isset($fancfg['HDDPOLL'])    ? intval($fancfg['HDDPOLL'])              : 18;
-$hddignore  = isset($fancfg['HDDIGNORE'])  ? htmlspecialchars($fancfg['HDDIGNORE'])  : '';
-$harddrives = isset($fancfg['HARDDRIVES']) ? htmlspecialchars($fancfg['HARDDRIVES']) : 'enable';
+$fancfg = ipmi_load_fan_config();
+$fanctrl    = htmlspecialchars((string)ipmi_array_get($fancfg, 'FANCONTROL', 'disable'));
+$fanpoll    = intval(ipmi_array_get($fancfg, 'FANPOLL', 6));
+$hddpoll    = intval(ipmi_array_get($fancfg, 'HDDPOLL', 18));
+$hddignore  = htmlspecialchars((string)ipmi_array_get($fancfg, 'HDDIGNORE', ''));
+$harddrives = htmlspecialchars((string)ipmi_array_get($fancfg, 'HARDDRIVES', 'enable'));
+$fan_schema_version = intval(ipmi_array_get($fancfg, 'SCHEMA_VERSION', IPMI_FAN_CONFIG_SCHEMA_VERSION));
 $range      = 64;
 
-$fanip   = (isset($fancfg['FANIP']) && ($netsvc === 'enable')) ? htmlspecialchars($fancfg['FANIP']) : htmlspecialchars($ipaddr) ;
+$fanip = ($netsvc === 'enable')
+    ? htmlspecialchars((string)ipmi_array_get($fancfg, 'FANIP', 'None'))
+    : htmlspecialchars($ipaddr);
 
 /* board info */
 #if($board === 'ASRock' || $board === 'ASRockRack'){
@@ -22,14 +25,16 @@ switch($board) {
 
     //if board is ASRock
     //check number of physical CPUs
-    if( $override == 'disable')
-      $cmd_count = (intval(trim(shell_exec("/usr/bin/lscpu | grep 'Socket(s):' | awk '{print $2}'"))) < 2) ? 0 : 1;
-    else
-      $cmd_count = $ocount;
+    if ($override == 'disable') {
+        $socket_count = intval(ipmi_read_lscpu_field('Socket(s)'));
+        $cmd_count = ($socket_count < 2) ? 0 : 1;
+    } else
+        $cmd_count = $ocount;
 
     $board_file = "$plg_path/board.json";
-    $board_file_status = (file_exists($board_file));
-    $board_json = ($board_file_status) ? json_decode((file_get_contents($board_file)), true) : [];
+    $board_file_status = file_exists($board_file);
+    $board_json = ipmi_load_board_config($board, $board_model);
+    $fancfg = ipmi_normalize_asrock_fancfg($board, $board_model, $board_json, $fancfg);
     break;
     case  'Supermicro': 
     //if board is Supermicro
@@ -117,8 +122,16 @@ switch($board) {
 ]; */
 }
 
-// fan network options base64_decode(
-$password = base64_decode($password) ;
-$fanopts = ($netsvc === 'enable') ? '-h '.escapeshellarg($fanip).' -u '.escapeshellarg($user).' -p '.
-    escapeshellarg($password).' --session-timeout=5000 --retransmission-timeout=1000' : '';
+// fan network options
+$fanopt_args = ($netsvc === 'enable')
+    ? ipmi_build_freeipmi_args($fanip, $user, $password_plain, null, false)
+    : [];
+$fanopts = ipmi_stringify_args($fanopt_args);
+
+$board_schema_version = ipmi_board_json_schema_version($board_json);
+$board_mapping = ipmi_board_fan_mapping_stats($board, $board_model, $board_json);
+$board_profile_name = ipmi_array_get($board_mapping, 'profile', '');
+$board_profile_label = ipmi_array_get($board_mapping, 'label', 'Unknown');
+$board_profile_expected = intval(ipmi_array_get($board_mapping, 'expected', 0));
+$board_profile_mapped = intval(ipmi_array_get($board_mapping, 'mapped', 0));
 ?>

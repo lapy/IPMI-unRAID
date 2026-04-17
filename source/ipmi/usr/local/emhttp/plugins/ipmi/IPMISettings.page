@@ -3,12 +3,16 @@ Title="Settings"
 Icon="heartbeat"
 Tag="cog"
 ---
-<? require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_settings.php';?>
+<?php require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_settings.php';?>
 
-<?$version_check=version_compare(parse_ini_file('/etc/unraid-version')['version'],'7.1.99', '>') ;?>
+<?php $version_check=version_compare(parse_ini_file('/etc/unraid-version')['version'],'7.1.99', '>') ;?>
 
 <link type="text/css" rel="stylesheet" href="<?=autov('/webGui/styles/jquery.switchbutton.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/ipmi.css');?>">
+<script>
+window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
+</script>
+<script src="<?=autov('/plugins/ipmi/js/ipmi-api.js');?>"></script>
 
 <div id="title" style="margin-top: -22px;">
     <span class="left"><i class="icon fa fa-cog"></i> IPMI Settings</span>
@@ -228,37 +232,19 @@ Available Hard Drives:
 
 > Display Settings can be applied at any time.
 
-Sensor #1:
-: <select id="DISP_SENSOR1" name="DISP_SENSOR1" class="display">
-        <option value=''>None</option>
-        <?=ipmi_get_options($disp_sensor1);?>
-  </select>
+> Choose up to <?=$footer_sensor_slots;?> sensors to display in the footer of webGui.
 
-> First sensor to monitor and display in footer of webGui.
+<?php for ($i = 1; $i <= $footer_sensor_slots; $i++): ?>
 
-Sensor #2:
-: <select id="DISP_SENSOR2" name="DISP_SENSOR2" class="display">
+Sensor #<?=$i;?>:
+: <select id="DISP_SENSOR<?=$i;?>" name="DISP_SENSOR<?=$i;?>" class="display">
         <option value=''>None</option>
-        <?=ipmi_get_options($disp_sensor2);?>
+        <?=ipmi_get_options($disp_sensors[$i]);?>
     </select>
 
-> Second sensor to monitor and display in footer of webGui.
+> Sensor #<?=$i;?> to monitor and display in footer of webGui.
 
-Sensor #3:
-: <select id="DISP_SENSOR3" name="DISP_SENSOR3" class="display">
-        <option value=''>None</option>
-        <?=ipmi_get_options($disp_sensor3);?>
-    </select>
-
-> Third sensor to monitor and display in footer of webGui.
-
-Sensor #4:
-: <select id="DISP_SENSOR4" name="DISP_SENSOR4" class="display">
-        <option value=''>None</option>
-        <?=ipmi_get_options($disp_sensor4);?>
-    </select>
-
-> Forth sensor to monitor and display in footer of webGui.
+<?php endfor; ?>
 
 &nbsp;
 
@@ -285,12 +271,12 @@ $(function(){
     <?php endif; ?>
 
     // dynamix plugin update api
-    <?if (function_exists('plugin_update_available') && $version = plugin_update_available('ipmi')):?>
+    <?php if (function_exists('plugin_update_available') && $version = plugin_update_available('ipmi')): ?>
         showNotice('IPMI <?=htmlspecialchars($version);?> available. <a>Update</a>','ipmi');
         $('#user-notice a').on('click', function () {
             $('#user-notice').empty();
         });
-    <?endif;?>
+    <?php endif; ?>
 
     initIgnoreDropdown(false);
 
@@ -398,10 +384,11 @@ function resetSeldDATA() {
 }
 
 function resetFootDATA() {
-    $('#DISP_SENSOR1')[0].selectedIndex = 0;
-    $('#DISP_SENSOR2')[0].selectedIndex = 0;
-    $('#DISP_SENSOR3')[0].selectedIndex = 0;
-    $('#DISP_SENSOR4')[0].selectedIndex = 0;
+    for (var i = 1; i <= <?=$footer_sensor_slots;?>; i++) {
+        var field = $('#DISP_SENSOR' + i)[0];
+        if (field)
+            field.selectedIndex = 0;
+    }
     $('#settings-footer').submit();
 }
 
@@ -464,11 +451,11 @@ function verifyDATA() {
 
 // send random test event
 function EventTest() {
-    $.getJSON('/plugins/ipmi/include/ipmi_event_test.php',
-        function(Message) {
+    ipmiPost('/plugins/ipmi/include/ipmi_event_test.php', {},
+        function(data) {
         swal({
             title: 'Sample Event Sent:',
-            text: Message,
+            text: data.event,
             type: 'success',
             showCancelButton: false,
             closeOnConfirm: true,
@@ -486,18 +473,13 @@ function resetBMC(){
         showCancelButton: true,
         closeOnConfirm: false
     }, function() {
-        $.post('/plugins/ipmi/include/bmc_reset.php', {csrf_token:"<?=$var['csrf_token']?>"},function(data) {
-            var Title = 'BMC Reset';
-
-            if(data.success){
-                swal({title:Title,text:'cold reset of BMC sucessful',type:'success',closeOnConfirm: true},function() {
-                    location.reload(true);
-                });
-            }else{
-                swal({title:Title,text:data.error,type:'error'});
-            }
-
-        }, 'json');
+        ipmiPost('/plugins/ipmi/include/bmc_reset.php', {},function(data, response) {
+            swal({title:'BMC Reset',text:response.message || 'cold reset of BMC successful',type:'success',closeOnConfirm: true},function() {
+                location.reload(true);
+            });
+        }, function(response) {
+            swal({title:'BMC Reset',text:ipmiResponseText(response),type:'error'});
+        });
     });
 };
 

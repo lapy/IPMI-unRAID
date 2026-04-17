@@ -46,6 +46,10 @@ Markdown="false"
 </div>
 
 <script>
+window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
+</script>
+<script src="<?=autov('/plugins/ipmi/js/ipmi-api.js');?>"></script>
+<script>
 $(function(){
     $('#tblArchive').tablesorter({
         sortList: [[2,1]],
@@ -95,7 +99,7 @@ $(function(){
 /* load ipmi archive table */
 function archiveArray(){
     $('#tblArchive tbody').html("<tr><td colspan='6'><br><i class='fa fa-spinner fa-spin icon'></i><em>Please wait, retrieving event information ...</em></td><tr>");
-    $.getJSON('/plugins/ipmi/include/ipmi_helpers.php', {action:'ipmiarch'}, function(data) {
+    ipmiPost('/plugins/ipmi/include/ipmi_helpers.php', {action:'ipmiarch'}, function(data) {
         $('#tblArchive tbody').empty();
         $.each(data.Archives, function (i, archive) {
             var Host = (typeof archive.IP == 'undefined') ? '' : archive.IP; // check if network was connection used
@@ -141,14 +145,14 @@ function ArchiveDelete(ID) {
             showCancelButton: true,
             closeOnConfirm: true,
         }, function() {
-            $.get(EventDelete, {event: ID}, function() {
+            ipmiPost(EventDelete, {event: ID}, function() {
                 $('#tblArchive tbody').empty();
                 }
             );
         });
     } else {
         var trID = $('#'+ID);
-        $.get(EventDelete, {event: ID},
+        ipmiPost(EventDelete, {event: ID},
             function() {
                 //animate removal of table row
                 trID

@@ -1,2 +1,2 @@
 #!/bin/sh
-/usr/sbin/ipmifan --daemon
+nohup /usr/sbin/ipmifan --quiet >/dev/null 2>&1 &

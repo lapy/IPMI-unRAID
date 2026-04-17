@@ -12,7 +12,32 @@ Cond="exec(\"grep -o '^OVERRIDE=.enable' /boot/config/plugins/ipmi/ipmi.cfg 2>/d
     <dl><span class="status" id="fanctrl-status">Fan Control: <?=$fanctrl_status;?></span><dl>
 </div>
 
-<?if ($board_status !== false):?>
+<?php if ($board_status !== false): ?>
+<script>
+window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
+</script>
+<script src="<?=autov('/plugins/ipmi/js/ipmi-api.js');?>"></script>
+
+<div class="ipmi-summary-grid">
+    <section class="ipmi-summary-card">
+        <h4>Runtime</h4>
+        <p><strong>Board:</strong> <?=$board." ".$board_model." ".$sm_gen?></p>
+        <p><strong>Fan Control:</strong> <?=$fanctrl_status?></p>
+        <p><strong>Profile:</strong> <?=htmlspecialchars($board_profile_label);?></p>
+    </section>
+    <section class="ipmi-summary-card">
+        <h4>Config Health</h4>
+        <p><strong>ipmi.cfg schema:</strong> v<?=$cfg_schema_version;?></p>
+        <p><strong>fan.cfg schema:</strong> v<?=$fan_schema_version;?></p>
+        <p><strong>board.json schema:</strong> <?=$board_file_status ? 'v'.$board_schema_version : 'missing';?></p>
+    </section>
+    <section class="ipmi-summary-card">
+        <h4>Fan Mapping</h4>
+        <p><strong>Status:</strong> <?=$board_file_status ? 'Present' : 'Missing';?></p>
+        <p><strong>Mapped slots:</strong> <?=$board_profile_mapped;?><?=($board_profile_expected > 0) ? ' / '.$board_profile_expected : '';?></p>
+        <p><strong>Action:</strong> <?=$board_file_status ? 'Ready to review' : 'Run Scan Headers';?></p>
+    </section>
+</div>
 
 <form name="fanctrl_settings" method="POST" action="/update.php" target="progressFrame">
 <input type="hidden" name="#file" value="ipmi/fan.cfg" />
@@ -64,6 +89,11 @@ Cond="exec(\"grep -o '^OVERRIDE=.enable' /boot/config/plugins/ipmi/ipmi.cfg 2>/d
     <dt>Hard Drive Polling Time:</dt>
     <dd>
         <select id="HDDPOLL" class="fanctrl-run" name="HDDPOLL" size="1" title="Amount of time between hard drive temperature checks">
+        <?=mk_option($hddpoll, '1', '10 sec');?>
+        <?=mk_option($hddpoll, '2', '20 sec');?>
+        <?=mk_option($hddpoll, '3', '30 sec');?>
+        <?=mk_option($hddpoll, '4', '40 sec');?>
+        <?=mk_option($hddpoll, '5', '50 sec');?>
         <?=mk_option($hddpoll, '6', '1 min');?>
         <?=mk_option($hddpoll, '12', '2 min');?>
         <?=mk_option($hddpoll, '18', '3 min');?>
@@ -79,13 +109,13 @@ Cond="exec(\"grep -o '^OVERRIDE=.enable' /boot/config/plugins/ipmi/ipmi.cfg 2>/d
     <p>Specify how long between checking hard drive temperatures.  Default is 3 minutes.</p>
 </blockquote>
 
-<?if ($netsvc == 'enable'):?>
+<?php if ($netsvc == 'enable'): ?>
 
 <dl>
     <dt>Fan Control IP Address:</dt>
     <dd>
         <select id="FANIP" class="fanctrl-run" name="FANIP" size="1" title="ip address of ipmi fan to control">
-        <?get_fanip_options();?>
+        <?php get_fanip_options(); ?>
     </select>
     </dd>
 </dl>
@@ -93,22 +123,22 @@ Cond="exec(\"grep -o '^OVERRIDE=.enable' /boot/config/plugins/ipmi/ipmi.cfg 2>/d
     <p>If network connections are enabled, select which ipmi ip address to use for controlling fans. Only one system can be controlled.</p>
 </blockquote>
 
-<?endif;?>
+<?php endif; ?>
 
 &nbsp;
 
-<dl>
-    <dt><input id="FAN_DEFAULT" class="fanctrl-run" type="button" value="Default" title="loads the default values for fan control">
-    <?if ($board === 'ASRock' || $board === 'ASRockRack'):?>
-        <input id="btnConfig" class="fanctrl-run" type="button" value="Configure" title="tests your fans and determines their location for fan control">
-    <?endif;?>
-    </dt>
-    <dd><span><input id="btnFANApply" type="submit" value="Apply"><input type="button" value="Done" onClick="done()"><span></dd>
+	<dl>
+	    <dt><input id="FAN_DEFAULT" class="fanctrl-run" type="button" value="Default" title="loads the default values for fan control">
+	    <?php if ($board === 'ASRock' || $board === 'ASRockRack'): ?>
+	        <input id="btnConfig" class="fanctrl-run" type="button" value="Scan Headers" title="tests your fans and determines their location for fan control">
+	    <?php endif; ?>
+	    </dt>
+	    <dd><span><input id="btnFANApply" type="submit" value="Apply"><input type="button" value="Done" onClick="done()"><span></dd>
 </dl>
-<blockquote class="inline_help">
-    <p>'Default' loads the default values for fan control.</p>
-    <p>'Configure' button tests your fans and determines their location for fan control. All fans will initially be set to full speed. Each location will be tested at one third speed to determine which fan is present. This will take about 1 min. On completion fans will return to auto. You can start fan control</p>
-</blockquote>
+	<blockquote class="inline_help">
+	    <p>'Default' loads the default values for fan control.</p>
+	    <p>'Scan Headers' tests your fans and determines their location for fan control. All fans will initially be set to full speed. Each location will be tested at one third speed to determine which fan is present. This will take about 1 min. On completion fans will return to auto and you can start fan control.</p>
+	</blockquote>
 
 </form>
 
@@ -160,11 +190,11 @@ Cond="exec(\"grep -o '^OVERRIDE=.enable' /boot/config/plugins/ipmi/ipmi.cfg 2>/d
 
     &nbsp;
 
-<?if ((($netsvc == 'disable') || (($netsvc == 'enable') && ($fanip != 'None')))):?>
+<?php if ((($netsvc == 'disable') || (($netsvc == 'enable') && ($fanip != 'None')))): ?>
 
-    <?get_fanctrl_options();?>
+    <?php get_fanctrl_options(); ?>
 
-<?endif;?>
+<?php endif; ?>
 </div>
 &nbsp;
 
@@ -183,7 +213,7 @@ Cond="exec(\"grep -o '^OVERRIDE=.enable' /boot/config/plugins/ipmi/ipmi.cfg 2>/d
         <th>Clear</th>
     </thead>
     <tbody>
-<?
+<?php
 $log = '/var/log/ipmifan';
 $version = parse_ini_file("/etc/unraid-version");
 if(is_file($log)){
@@ -198,11 +228,11 @@ if(is_file($log)){
 ?>
     </tbody>
 </table>
-<?endif;?>
+<?php endif; ?>
 
 <script>
 $(function(){
-    <?if ($board_status !== false):?>
+    <?php if ($board_status !== false): ?>
 
     initDriveDropdown(false);
 
@@ -245,14 +275,15 @@ $(function(){
                 openBox('/plugins/ipmi/scripts/ipmi2json', 'IPMI Fan Config', 600, 900, true);
     });
 
-    $('#FAN_DEFAULT').click(resetFANDATA);
-    $('#FANCONTROL').change(checkFANCTRL)
-    checkFANCTRL();
+	    $('#FAN_DEFAULT').click(resetFANDATA);
+	    $('#FANCONTROL').change(checkFANCTRL)
+        $('#fanctrl_options').on('submit', validateFanConfig);
+	    checkFANCTRL();
 
 
     $('#fanlog-clear').on('click', clearFanLOG);
 
-    <?endif;?>
+    <?php endif; ?>
 
     $('#readings').click(function() {
         $.cookie('one', 'tab1', { expires:null, path: '/'});
@@ -261,21 +292,68 @@ $(function(){
 
 });
 
-<?if ($board_status !== false):?>
+<?php if ($board_status !== false): ?>
 
 function resetFANDATA() {
     $('#FANCONTROL')[0].selectedIndex = 0;
-    $('#FANPOLL')[0].selectedIndex = 5;
-    $('#HDDPOLL')[0].selectedIndex = 2;
+    $('#FANPOLL').val('6');
+    $('#HDDPOLL').val('18');
     $('#FANIP')[0].selectedIndex = 0;
     $('#fanctrl_settings').submit();
 }
 
 /* empty fan log */
 function clearFanLOG() {
-    $.get('/plugins/ipmi/include/fanlog_clear.php', {},function() {
+    ipmiPost('/plugins/ipmi/include/fanlog_clear.php', {},function() {
         $('#fanlog-size').html('0');
     });
+}
+
+function validateFanConfig(event) {
+    var errors = [];
+
+    if ($('#FANCONTROL').val() === 'enable' && "<?=$board_file_status;?>" == false && ("<?=$board;?>" === 'ASRock' || "<?=$board;?>" === 'ASRockRack')) {
+        errors.push('Run Scan Headers before enabling fan control on this board.');
+    }
+
+    $('.ipmi-fan-card').each(function() {
+        var fanName = $(this).data('fanName');
+        var tempSensor = $('select[name="TEMP_' + fanName + '"]').val();
+        var overrideSensor = $('select[name="TEMPHDD_' + fanName + '"]').val();
+
+        if (tempSensor && tempSensor !== '0') {
+            var low = parseInt($('select[name="TEMPLO_' + fanName + '"]').val(), 10);
+            var high = parseInt($('select[name="TEMPHI_' + fanName + '"]').val(), 10);
+            var min = parseInt($('select[name="FANMIN_' + fanName + '"]').val(), 10);
+            var max = parseInt($('select[name="FANMAX_' + fanName + '"]').val(), 10);
+
+            if (low >= high) errors.push(fanName + ': low threshold must be below high threshold.');
+            if (min > max) errors.push(fanName + ': minimum fan speed must not exceed maximum fan speed.');
+        }
+
+        if (overrideSensor && overrideSensor !== '0') {
+            var lowOverride = parseInt($('select[name="TEMPLOO_' + fanName + '"]').val(), 10);
+            var highOverride = parseInt($('select[name="TEMPHIO_' + fanName + '"]').val(), 10);
+            var minOverride = parseInt($('select[name="FANMINO_' + fanName + '"]').val(), 10);
+            var maxOverride = parseInt($('select[name="FANMAXO_' + fanName + '"]').val(), 10);
+
+            if (lowOverride >= highOverride) errors.push(fanName + ': HDD override low threshold must be below the high threshold.');
+            if (minOverride > maxOverride) errors.push(fanName + ': HDD override minimum fan speed must not exceed the maximum.');
+        }
+    });
+
+    if (!errors.length)
+        return true;
+
+    if (event)
+        event.preventDefault();
+
+    swal({
+        title: 'Fan configuration needs attention',
+        text: errors.slice(0, 8).join('\n'),
+        type: 'error'
+    });
+    return false;
 }
 
 function initDriveDropdown(remove) {
@@ -319,5 +397,5 @@ function toggleFanCTRL() {
         $('.fanctrl-settings').hide('slow');
     }
 }
-<?endif;?>
+<?php endif; ?>
 </script>

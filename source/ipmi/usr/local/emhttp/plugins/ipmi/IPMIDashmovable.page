@@ -1,7 +1,7 @@
 Menu="Dashboard:0"
 Cond="parse_ini_file('/boot/config/plugins/ipmi/ipmi.cfg')['DASH'] == 'enable' && version_compare(parse_ini_file('/etc/unraid-version')['version'],'6.12.0-beta6', '>')"
 ---
-<?PHP
+<?php
 /*
   Create a .page file based on this example file and store the file in your plugin directory
   Make sure this file has a unique name not used by the GUI or other plugins
@@ -52,6 +52,11 @@ EOT;
 ?>
 
 <script>
+window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
+</script>
+<script src="<?=autov('/plugins/ipmi/js/ipmi-api.js');?>"></script>
+
+<script>
 
 </script>
 
@@ -75,7 +80,7 @@ function sensorRefresh() {
 
 /* load ipmi sensor table */
 function sensorArray(Refresh){
-    $.getJSON('/plugins/ipmi/include/ipmi_helpers.php', {action:'ipmidash'}, function(data) {
+    ipmiPost('/plugins/ipmi/include/ipmi_helpers.php', {action:'ipmidash'}, function(data) {
         $.each(data.Sensors, function (i, sensor) {
             var LowerNR = parseFloat(sensor.LowerNR);
             var LowerC  = parseFloat(sensor.LowerC);

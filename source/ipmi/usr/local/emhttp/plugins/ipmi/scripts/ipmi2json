@@ -3,6 +3,7 @@
 ##############################
 ######  DEAMON SECTION  ######
 ##############################
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_runtime.php';
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_options.php';
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_settings_fan.php';
 $debug = FALSE;
@@ -48,16 +49,17 @@ if (array_key_exists('version', $args)) {
 }
 
 $debug  = (array_key_exists('debug', $args));
+$force  = (array_key_exists('f', $args) || array_key_exists('force', $args));
 
-if(file_exists($lockfile) && !$force){
-    $lock_pid = file($lockfile, FILE_IGNORE_NEW_LINES)[0];
+if (ipmi_is_service_running($lockfile) && !$force) {
+    $lock_pid = ipmi_read_pidfile($lockfile);
     fanlog("Please stop ${prog2} [$lock_pid] then try again");
     exit(0);
 }
 
 if (!array_key_exists($board, $boards)){
     $msg = "Your $board motherboard is not supported yet";
-    logger($msg, $argq);
+    echo $msg.PHP_EOL;
     exit(1);
 }
 
@@ -85,17 +87,122 @@ function debug($m){
   }
 }
 
-/* get fan sensors */
-function ipmi_sensors_fans() {
-    global $ipmi, $fanopts;
+function ipmi2json_log_command_result($result) {
+    global $debug;
 
-    // return empty array if no ipmi detected or network options
-    if(!$ipmi && empty($fanopts))
+    if ($debug)
+        fanlog($result['command']);
+
+    if (!$result['success'] && trim((string)$result['text']) !== '')
+        fanlog(trim((string)$result['text']));
+}
+
+function ipmi2json_run_raw($raw, $payload='') {
+    global $fanopt_args;
+
+    $args = array_merge(
+        ipmi_hex_tokens($raw),
+        ipmi_hex_tokens($payload),
+        $fanopt_args
+    );
+
+    $result = ipmi_run_process('ipmi-raw', $args);
+    ipmi2json_log_command_result($result);
+    return $result;
+}
+
+function payload_tokens($payload) {
+    $payload = ipmi_normalize_hex_string($payload);
+    return empty($payload) ? [] : explode(' ', $payload);
+}
+
+function payload_string($payload) {
+    return implode(' ', $payload);
+}
+
+function asrock_probe_layout($profile_name, $cmd_count, $command_index) {
+    if ($profile_name === 'asrockrack_romed8u_2t') {
+        $profile = ipmi_get_asrock_fan_profile($profile_name);
+        return [
+            'raw' => $profile['raw'],
+            'auto' => ipmi_compose_prefixed_command($profile['auto_prefix'], $profile['auto_payload']),
+            'full' => ipmi_compose_prefixed_command($profile['full_prefix'], $profile['full_payload']),
+            'full_prefix' => $profile['full_prefix'],
+            'full_payload' => $profile['full_payload'],
+            'slot_indices' => isset($profile['probe_slots']) ? $profile['probe_slots'] : range(0, $profile['slot_count'] - 1),
+            'location_offset' => 1,
+        ];
+    }
+
+    if ($cmd_count == 0) {
+        return [
+            'raw' => '00 3a 01',
+            'auto' => '00 00 00 00 00 00 00 00',
+            'full' => '64 64 64 64 64 64 64 64',
+            'slot_start' => 0,
+            'slot_end' => 7,
+            'location_offset' => 1,
+        ];
+    }
+
+    if ($command_index == 0) {
+        return [
+            'raw' => '00 3a 01',
+            'auto' => '00 00 00 00 00 00',
+            'full' => '01 64 64 64 64 64',
+            'slot_start' => 1,
+            'slot_end' => 5,
+            'location_offset' => 0,
+        ];
+    }
+
+    return [
+        'raw' => "00 3a ${command_index}1",
+        'auto' => '00 00 00 00',
+        'full' => '01 64 64 64',
+        'slot_start' => 1,
+        'slot_end' => 3,
+        'location_offset' => 0,
+    ];
+}
+
+function asrock_probe_payload($full_payload, $slot_index, $probe_value='21') {
+    $payload = payload_tokens($full_payload);
+    if (array_key_exists($slot_index, $payload))
+        $payload[$slot_index] = $probe_value;
+
+    return payload_string($payload);
+}
+
+function asrock_profile_command($profile_name, $command_key) {
+    $profile = ipmi_get_asrock_fan_profile($profile_name);
+    $prefix_key = $command_key.'_prefix';
+    $payload_key = $command_key.'_payload';
+
+    if (empty($profile['raw']) || empty($profile[$prefix_key]) || empty($profile[$payload_key]))
         return [];
 
-    $cmd = "/usr/sbin/ipmi-sensors --comma-separated-output --no-header-output $fanopts 2>/dev/null";
-    $return_var=null ;
-    exec($cmd, $output, $return_var);
+    return [
+        'raw' => $profile['raw'],
+        'payload' => ipmi_compose_prefixed_command($profile[$prefix_key], $profile[$payload_key]),
+    ];
+}
+
+/* get fan sensors */
+function ipmi_sensors_fans() {
+    global $ipmi, $fanopt_args;
+
+    // return empty array if no ipmi detected or network options
+    if(!$ipmi && empty($fanopt_args))
+        return [];
+
+    $result = ipmi_run_process(
+        '/usr/sbin/ipmi-sensors',
+        array_merge(['--comma-separated-output', '--no-header-output'], $fanopt_args),
+        false
+    );
+    $output = $result['output'];
+    $return_var = $result['exit_code'];
 
     // return empty array if error
     if($return_var)
@@ -125,7 +232,7 @@ function ipmi_sensors_fans() {
 
 
 #############################################
-# ASRock                                    #
+# ASRock legacy                             #
 # ipmi-raw 00 3a 01 00 00 00 00 00 00 00 00 #
 # ipmi-raw 00 3a 01 AA BB CC DD EE FF GG HH #
 # 00 = smartfan mode                        #
@@ -139,68 +246,55 @@ function ipmi_sensors_fans() {
 # ipmi-raw 00 3a 01 00 AA BB CC DD EE
 # ipmi-raw 00 3a 11 00 AA BB CC
 #############################################
-#
+
+#############################################
+# ASRock Rack ROMED8U-2T                          #
+# ipmi-raw 00 3a d8 <16 auto/manual positions>   #
+# ipmi-raw 00 3a d6 <16 PWM positions>           #
+# ipmi2json only probes the 6 physical headers   #
+# PWM writes require a minimum value of 16       #
+#############################################
 
 ####  DO YOUR STUFF HERE  ####
 
-
-$lun   = '00';
-$netfn = '3a';
-$com   = '01';
-$raw   = '00 3a 01';
+$board_profile = ipmi_resolve_asrock_fan_profile($board, $board_model, $board_json);
 $board_json = [];
 $board_tmp = $board;
 
-if ($cmd_count == 0){
-    $fans_start = 0;
-    $fans_count = 7;
-    $auto  = '00 00 00 00 00 00 00 00';
-    $full  = '64 64 64 64 64 64 64 64';
-}else{
-    $fans_start = 1;
-    $fans_count = 5;
-    $auto  = '00 00 00 00 00 00';
-    $full  = '01 64 64 64 64 64';
-}
-
 fanlog('Checking IPMI fan Locations...');
 
-for($i = 0; $i <= $cmd_count; $i++){
-    $fans   = [];
-    if ($i !== 0){
-        $fans_count = 3;
-        $auto  = '00 00 00 00';
-        $full  = '01 64 64 64';
-    }
+$manual_command = asrock_profile_command($board_profile, 'manual');
+if (!empty($manual_command)) {
+    fanlog('Setting fans to manual before probing');
+    ipmi2json_run_raw($manual_command['raw'], $manual_command['payload']);
+    sleep(5);
+}
 
-    $raw = "${lun} ${netfn} ${i}1";
+for($i = 0; $i <= $cmd_count; $i++){
+    $probe = asrock_probe_layout($board_profile, $cmd_count, $i);
+    $fans   = [];
 
     // set fans to full speed and get readings
-    $cmd = "ipmi-raw $raw $full $fanopts 2>&1";
-
-    if ($debug)
-       fanlog($cmd);
-
-    shell_exec($cmd);
+    ipmi2json_run_raw($probe['raw'], $probe['full']);
 
     sleep(5);
     $fans_full = ipmi_sensors_fans();
 
+    $slot_indices = isset($probe['slot_indices']) ? $probe['slot_indices'] : range($probe['slot_start'], $probe['slot_end']);
+
 // step through each raw command position
-    for($ii = $fans_start; $ii <= $fans_count; $ii++){
+    foreach($slot_indices as $ii){
         $msg  = 'none';
-        $location = ($cmd_count < 1 ? ($ii+1) : $ii);
+        $location = $ii + $probe['location_offset'];
         $name = 'FAN_POS'.$location;
 
         // set postition in raw command to 1/3 and get readings
-        $hex = substr_replace($full,'21',$ii*3,2);
+        $probe_payload = isset($probe['full_payload']) ? $probe['full_payload'] : $probe['full'];
+        $hex = asrock_probe_payload($probe_payload, $ii);
+        if (isset($probe['full_prefix']))
+            $hex = trim($probe['full_prefix'].' '.$hex);
 
-        $cmd = "ipmi-raw $raw $hex $fanopts 2>&1";
-
-        if ($debug)
-            fanlog($cmd);
-
-        shell_exec($cmd);
+        ipmi2json_run_raw($probe['raw'], $hex);
 
         sleep(5);
         $fans_1third = ipmi_sensors_fans();
@@ -215,31 +309,32 @@ for($i = 0; $i <= $cmd_count; $i++){
             }
         }
         unset($fans_1third);
-        $fans[$name] = $i.'1';
+        $fan_key = ipmi_canonicalize_asrock_fan_name_for_profile($board_profile, $name);
+        $fans[$fan_key] = $i.'1';
         fanlog("Location $i-".$location.': '.$msg);
     }
 
-    $cmd = "ipmi-raw $raw $auto $fanopts 2>&1";
-
-    if ($debug)
-       fanlog($cmd);
-
-    shell_exec($cmd);
+    ipmi2json_run_raw($probe['raw'], $probe['auto']);
 
     if ($i !== 0)
         $board_tmp = $board.$i;
 
     $board_json[$board_tmp] =
-        [ 'raw'   => $raw,
-          'auto'  => $auto,
-          'full'  => $full,
+        [ 'raw'   => $probe['raw'],
+          'auto'  => $probe['auto'],
+          'full'  => $probe['full'],
           'fans'  => $fans
         ];
 
 }
 
+$board_json = ipmi_normalize_asrock_board_json($board, $board_model, $board_json);
+
+$board_json = ipmi_normalize_board_config($board, $board_model, $board_json);
+
 fanlog('Saving board configuration...');
-file_put_contents($board_file, json_encode($board_json,JSON_PRETTY_PRINT));
+if (!ipmi_save_board_config($board_json))
+    fanlog('Unable to save board configuration atomically.');
 
 /* print variable */
 $defined_vars = get_defined_vars();

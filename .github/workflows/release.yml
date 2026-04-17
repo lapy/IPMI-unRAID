@@ -1,0 +1,130 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional base version. Defaults to the current UTC date.
+        required: false
+        type: string
+      release_notes:
+        description: Optional release notes. One line per bullet item is enough.
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ipmi-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Install PHP and shell tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y php-cli shellcheck xz-utils
+
+      - name: Prepare plugin include path
+        run: |
+          sudo mkdir -p /usr/local/emhttp/plugins
+          sudo ln -sfn "$GITHUB_WORKSPACE/source/ipmi/usr/local/emhttp/plugins/ipmi" /usr/local/emhttp/plugins/ipmi
+
+      - name: Validate PHP, shell, and helper tests
+        run: |
+          find source/ipmi/usr/local/emhttp/plugins/ipmi/include -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l source/ipmi/usr/local/emhttp/plugins/ipmi/scripts/ipmifan
+          php -l source/ipmi/usr/local/emhttp/plugins/ipmi/scripts/ipmi2json
+          php -l source/release_info.php
+          shellcheck source/mkpkg
+          shellcheck source/release.sh
+          shellcheck source/ipmi/install/doinst.sh
+          shellcheck source/ipmi/usr/local/emhttp/plugins/ipmi/scripts/fanctrl_start
+          shellcheck source/ipmi/usr/local/emhttp/plugins/ipmi/scripts/fanctrl_stop
+          shellcheck source/ipmi/usr/local/emhttp/plugins/ipmi/scripts/seld_start
+          shellcheck source/ipmi/usr/local/emhttp/plugins/ipmi/scripts/seld_stop
+          php tests/php/run.php
+
+      - name: Prepare release notes input
+        id: notes
+        run: |
+          NOTES_FILE="$RUNNER_TEMP/ipmi-release-input.txt"
+          cat > "$NOTES_FILE" <<'EOF'
+          ${{ inputs.release_notes }}
+          EOF
+          echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Build release artifacts
+        id: build
+        run: |
+          bash source/release.sh \
+            --version "${{ inputs.version }}" \
+            --notes-file "${{ steps.notes.outputs.notes_file }}" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Prepare GitHub release body
+        id: body
+        run: |
+          BODY_FILE="$RUNNER_TEMP/ipmi-github-release.md"
+          {
+            echo "# IPMI ${{ steps.build.outputs.version }}"
+            cat "${{ steps.build.outputs.notes_path }}"
+            echo
+            echo "### Assets"
+            echo "- \`$(basename "${{ steps.build.outputs.package_path }}")\`"
+            echo "- \`$(basename "${{ steps.build.outputs.checksum_path }}")\`"
+            echo "- \`$(basename "${{ steps.build.outputs.manifest_path }}")\`"
+          } > "$BODY_FILE"
+          echo "body_file=$BODY_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Ensure release tag does not already exist
+        run: |
+          if git rev-parse "${{ steps.build.outputs.tag }}" >/dev/null 2>&1; then
+            echo "Tag already exists locally: ${{ steps.build.outputs.tag }}" >&2
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "${{ steps.build.outputs.tag }}" >/dev/null 2>&1; then
+            echo "Tag already exists on origin: ${{ steps.build.outputs.tag }}" >&2
+            exit 1
+          fi
+
+      - name: Commit release artifacts and tag
+        run: |
+          git add \
+            plugin/ipmi.plg \
+            "${{ steps.build.outputs.package_path }}" \
+            "${{ steps.build.outputs.checksum_path }}" \
+            "${{ steps.build.outputs.manifest_path }}"
+          if git diff --cached --quiet; then
+            echo "No release changes were produced." >&2
+            exit 1
+          fi
+          git commit -m "Release ${{ steps.build.outputs.version }}"
+          git tag "${{ steps.build.outputs.tag }}"
+          git push origin HEAD:master
+          git push origin "${{ steps.build.outputs.tag }}"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.build.outputs.tag }}" \
+            "${{ steps.build.outputs.package_path }}" \
+            "${{ steps.build.outputs.checksum_path }}" \
+            "${{ steps.build.outputs.manifest_path }}" \
+            --title "IPMI ${{ steps.build.outputs.version }}" \
+            --notes-file "${{ steps.body.outputs.body_file }}"

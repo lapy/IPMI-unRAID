@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PHP and shell tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y php-cli shellcheck xz-utils
+
+      - name: Prepare plugin include path
+        run: |
+          sudo mkdir -p /usr/local/emhttp/plugins
+          sudo ln -sfn "$GITHUB_WORKSPACE/source/ipmi/usr/local/emhttp/plugins/ipmi" /usr/local/emhttp/plugins/ipmi
+
+      - name: Lint PHP endpoints and scripts
+        run: |
+          find source/ipmi/usr/local/emhttp/plugins/ipmi/include -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l source/ipmi/usr/local/emhttp/plugins/ipmi/scripts/ipmifan
+          php -l source/ipmi/usr/local/emhttp/plugins/ipmi/scripts/ipmi2json
+          php -l source/release_info.php
+
+      - name: Shellcheck packaging and wrappers
+        run: |
+          shellcheck source/mkpkg
+          shellcheck source/release.sh
+          shellcheck source/ipmi/install/doinst.sh
+          shellcheck source/ipmi/usr/local/emhttp/plugins/ipmi/scripts/fanctrl_start
+          shellcheck source/ipmi/usr/local/emhttp/plugins/ipmi/scripts/fanctrl_stop
+          shellcheck source/ipmi/usr/local/emhttp/plugins/ipmi/scripts/seld_start
+          shellcheck source/ipmi/usr/local/emhttp/plugins/ipmi/scripts/seld_stop
+
+      - name: Run PHP helper tests
+        run: php tests/php/run.php
+
+      - name: Build staged package smoke test
+        run: |
+          ./source/mkpkg ipmi 2099.01.01-ci
+          test -f archive/ipmi-2099.01.01-ci-x86_64-1.txz
+          test -f archive/ipmi-2099.01.01-ci-x86_64-1.md5
+          test -f archive/ipmi-2099.01.01-ci.plg

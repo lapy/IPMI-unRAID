@@ -47,6 +47,10 @@ Markdown="false"
     </blockquote>
 </div>
 <script src="<?=autov('/plugins/ipmi/js/parser-network.min.js');?>"></script>
+<script>
+window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
+</script>
+<script src="<?=autov('/plugins/ipmi/js/ipmi-api.js');?>"></script>
 
 <script>
 $(function(){
@@ -115,7 +119,7 @@ $(function(){
 
 /* load ipmi event table */
 function eventArray(){
-    $.getJSON('/plugins/ipmi/include/ipmi_helpers.php', {action:'ipmievents'}, function(data) {
+    ipmiPost('/plugins/ipmi/include/ipmi_helpers.php', {action:'ipmievents'}, function(data) {
         $.each(data.Events, function (i, event) {
             var Host = (typeof event.IP === 'undefined') ? '' : event.IP; // check if network connection was used
             $('#tblEvent tbody')
@@ -163,7 +167,7 @@ function Delete(ID) {
             showCancelButton: true,
             closeOnConfirm: true,
         }, function() {
-            $.get(EventDelete, {archive: Archive, event: ID}, function() {
+            ipmiPost(EventDelete, {archive: Archive, event: ID}, function() {
                 $('#tblEvent tbody').empty();
                 if(Archive == 1){
                     archiveArray();
@@ -172,7 +176,7 @@ function Delete(ID) {
         });
     } else {
         var trID = $('#'+ID);
-        $.get(EventDelete, {archive: Archive, event: ID},
+        ipmiPost(EventDelete, {archive: Archive, event: ID},
             function() {
                 //animate removal of table row
                 trID

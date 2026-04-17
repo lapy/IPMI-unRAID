@@ -8,14 +8,14 @@ require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_settings_fan.php';
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_drives.php';
 require_once '/usr/local/emhttp/plugins/dynamix/include/Helpers.php';
 
-extract(parse_plugin_cfg('dynamix',true));
+$dynamix_config = ipmi_parse_dynamix_config();
+$display = ipmi_array_get($dynamix_config, 'display', []);
 $debug = FALSE;
 
 set_time_limit(0);
 $prog     = pathinfo(__FILE__, PATHINFO_FILENAME);
 $lockfile = "/var/run/{$prog}.pid";
 $log      = '/var/log/ipmifan';
-$service  = __FILE__;
 openlog($prog, LOG_PID | LOG_PERROR, LOG_LOCAL0);
 
 $usage = <<<EOF
@@ -29,7 +29,7 @@ Usage: $prog [options]
       --full       set fans to full speed
   -q, --quiet      suppress all messages
       --debug      turn on debugging
-      --daemon     run in the background
+      --daemon     run in the background (compatibility mode)
       --help       display this help and exit
       --quit       stop daemon if running
       --version    output version information and exit
@@ -67,38 +67,36 @@ $debug  = (array_key_exists('debug', $args));
 $daemon = (array_key_exists('d', $args) || array_key_exists('daemon', $args));
 $quit   = (array_key_exists('quit', $args));
 
-$raw  = (empty($board_json)) ? '' : $board_json[$board]['raw'];
-
-if(file_exists($lockfile)){
-    $lock_pid = file($lockfile, FILE_IGNORE_NEW_LINES)[0];
-    $pid_running = preg_replace("/\s+/", "", shell_exec("ps -p $lock_pid | grep $lock_pid"));
-    if($pid_running){
-        if($quit){
-            fanlog('Stopping Fan Control');
-            syslog(LOG_INFO, "killing daemon with PID [$lock_pid]");
-            exec("kill $lock_pid");
-            unlink($lockfile);
-            autofan();
-            exit(0);
-        }else{
-            echo "$prog is already running [$lock_pid]".PHP_EOL;
-            exit(0);
-        }
-    }else{
-        if($quit){
-            echo "$lock_pid is not currently running".PHP_EOL;
-            unlink($lockfile);
-            exit(0);
-        }else
-            file_put_contents($lockfile, getmypid());
-    }
-}else{
+if (ipmi_is_service_running($lockfile)) {
+    $lock_pid = ipmi_read_pidfile($lockfile);
     if($quit){
-        echo "$prog not currently running".PHP_EOL;
+        fanlog('Stopping Fan Control');
+        syslog(LOG_INFO, "killing daemon with PID [$lock_pid]");
+        ipmi_stop_service($lockfile);
+        autofan();
         exit(0);
-    }else
-        file_put_contents($lockfile, getmypid());
+    } else {
+        echo "$prog is already running [$lock_pid]".PHP_EOL;
+        exit(0);
+    }
+} else {
+    $lock_pid = ipmi_read_pidfile($lockfile);
+    if($quit){
+        if ($lock_pid > 0)
+            echo "$lock_pid is not currently running".PHP_EOL;
+        else
+            echo "$prog not currently running".PHP_EOL;
+        @unlink($lockfile);
+        exit(0);
+    }
+
+    ipmi_write_pidfile($lockfile);
 }
+
+register_shutdown_function(function () use ($lockfile) {
+    if (ipmi_read_pidfile($lockfile) === getmypid())
+        @unlink($lockfile);
+});
 
 if($arga){
         autofan();
@@ -116,11 +114,8 @@ if (!$board_file_status) {
     exit(1);
 }
 
-if($daemon){
-    exec("php $service 1>/dev/null ".($debug ? "":"2>&1 ")."&");
-    syslog(LOG_INFO, "process started. To terminate it, type: $prog --quit");
-    exit(0);
-}
+if($daemon)
+    logger('The --daemon flag is now a compatibility alias; use fanctrl_start for background execution.', $argq);
 
 #############################################
 # ASRock
@@ -139,11 +134,10 @@ if($daemon){
 #############################################
 
 #############################################
-# ASRock 570
+# ASRock Rack d6/d8 profile (ROMED8U-2T)
 # ipmi-raw 00 3a d6 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 # ipmi-raw 00 3a d6 AA BB CC DD EE FF GG HH II JJ KK LL MM NN OO PP
-# 00 = smartfan mode
-# 01 - 64  = 1% - 100%
+# Auto/manual uses d8 and PWM writes must stay at or above 16
 #############################################
 
 #############################################
@@ -213,103 +207,208 @@ function debug($m){
   }
 }
 
+function ipmifan_log_command_result($result) {
+    global $debug;
+
+    if ($debug)
+        fanlog($result['command']);
+
+    if (!$result['success'] && trim((string)$result['text']) !== '')
+        fanlog(trim((string)$result['text']));
+}
+
+function ipmifan_run_raw($raw, $payload='') {
+    global $fanopt_args;
+
+    $args = array_merge(
+        ipmi_hex_tokens($raw),
+        ipmi_hex_tokens($payload),
+        $fanopt_args
+    );
+
+    $result = ipmi_run_process('ipmi-raw', $args);
+    ipmifan_log_command_result($result);
+    return $result;
+}
+
+function ipmifan_read_raw_mode($raw) {
+    $result = ipmifan_run_raw($raw);
+    return ipmi_last_token($result['text']);
+}
+
+function is_asrock_family() {
+    global $board;
+    return ($board === 'ASRock' || $board === 'ASRockRack');
+}
+
+function board_entry_key($index=0) {
+    global $board;
+    return ($index == 0) ? $board : $board.$index;
+}
+
+function get_board_entry($index=0) {
+    global $board_json;
+    $key = board_entry_key($index);
+    return (isset($board_json[$key]) && is_array($board_json[$key])) ? $board_json[$key] : [];
+}
+
+function asrock_board_entries() {
+    global $cmd_count;
+    $entries = [];
+
+    for($i = 0; $i <= $cmd_count; $i++)
+        $entries[$i] = get_board_entry($i);
+
+    return $entries;
+}
+
+function asrock_command_specs($command_key, $fallback_key='') {
+    $commands = [];
+
+    foreach(asrock_board_entries() as $entry){
+        $raw = isset($entry['raw']) ? $entry['raw'] : '';
+        $payload = !empty($entry[$command_key]) ? $entry[$command_key] : '';
+
+        if (empty($payload) && !empty($fallback_key))
+            $payload = !empty($entry[$fallback_key]) ? $entry[$fallback_key] : '';
+
+        if (!empty($raw) && !empty($payload))
+            $commands[] = ['raw' => $raw, 'payload' => $payload];
+    }
+
+    return $commands;
+}
+
+function build_asrock_pwm_segment($pwm, $fan_count, $pwm_prefix) {
+    global $board_model, $cmd_count;
+
+    if($board_model == 'EP2C612 WS' && empty($pwm_prefix))
+        return " $pwm";
+
+    if($cmd_count !== 0 && $fan_count == 0 && empty($pwm_prefix)){
+        if($pwm == '00')
+            return ' 00 00';
+
+        return " 01 $pwm";
+    }
+
+    return " $pwm";
+}
+
+function build_asrock_pwm_payload($hex, $pwm_prefix) {
+    $payload = trim($hex);
+    if (!empty($pwm_prefix))
+        $payload = trim($pwm_prefix.' '.$payload);
+
+    return $payload;
+}
+
+function has_asrock_manual_profile() {
+    if (!is_asrock_family())
+        return false;
+
+    foreach(asrock_board_entries() as $entry){
+        if (!empty($entry['manual']))
+            return true;
+    }
+
+    return false;
+}
+
+function ipmifan_run_commands($commands, $echo_output=false) {
+    $combined_output = [];
+
+    foreach ($commands as $command) {
+        $result = ipmifan_run_raw(
+            ipmi_array_get($command, 'raw', ''),
+            ipmi_array_get($command, 'payload', '')
+        );
+
+        if (!empty($result['text']))
+            $combined_output[] = trim((string)$result['text']);
+    }
+
+    if ($echo_output && !empty($combined_output))
+        echo implode(PHP_EOL, $combined_output).PHP_EOL;
+}
+
 /* auto fan */
 function autofan() {
-    global $board_json, $board, $board_model, $cmd_count, $fanopts;
+    global $board_json, $board;
     fanlog('Setting fans to auto');
-    $cmd = '';
     switch($board) {
         case "ASRock":
         case "ASRockRack":
-            //if board is ASRock or AsRockRack
-            for($i = 0; $i <= $cmd_count; $i++){
-                $board0 = ($i == 0) ? $board : $board.$i;
-                $raw    = $board_json[$board0]['raw'];
-                $auto   = $board_json[$board0]['auto'];
-                $cmd   .= "ipmi-raw $raw $auto $fanopts 2>&1 >/dev/null &";
-            }
+            ipmifan_run_commands(asrock_command_specs('auto'));
             break;
         case "Supermicro":
-            //if board is Supermicro
-            $raw    = $board_json[$board]['raw'];
             $auto = $board_json[$board]['auto'];
-            $mode = trim(shell_exec("ipmi-raw 00 30 45 00 | awk -F '45 00 ' '{print $2}'"));
-            $cmd  = "ipmi-raw $auto $mode $fanopts 2>&1 >/dev/null &";
+            $mode = ipmifan_read_raw_mode('00 30 45 00');
+            ipmifan_run_raw($auto, $mode);
             break;
         case "Dell":
-            //if board is Dell
-            $raw = $board_json[$board]['raw'];
             $auto = $board_json[$board]['auto'];
-            $cmd   = "ipmi-raw $auto $fanopts 2>&1 >/dev/null &";
+            ipmifan_run_raw($auto);
             break;
     }
-    shell_exec($cmd);
 }
 
 /* manual fan */
 function manualfan() {
-    global $board_json, $board, $board_model, $cmd_count, $fanopts;
+    global $board_json, $board;
     fanlog('Setting fans to manual');
-    $cmd = '';
     switch($board) {
         case "ASRock":
         case "ASRockRack":
-            //if board is ASRock or AsRockRack
-            for($i = 0; $i <= $cmd_count; $i++){
-                $board0 = ($i == 0) ? $board : $board.$i;
-                $raw    = $board_json[$board0]['raw'];
-                $auto   = $board_json[$board0]['auto'];
-                $cmd   .= "ipmi-raw $raw $auto $fanopts 2>&1 >/dev/null &";
-            }
+            ipmifan_run_commands(asrock_command_specs('manual', 'auto'));
             break;
         case "Supermicro":
-            //if board is Supermicro
-            $raw    = $board_json[$board]['raw'];
             $auto = $board_json[$board]['auto'];
-            $mode = trim(shell_exec("ipmi-raw 00 30 45 00 | awk -F '45 00 ' '{print $2}'"));
-            $cmd  = "ipmi-raw $auto $mode $fanopts 2>&1 >/dev/null &";
+            $mode = ipmifan_read_raw_mode('00 30 45 00');
+            ipmifan_run_raw($auto, $mode);
             break;
         case "Dell":
-            //if board is Dell
-            $raw    = $board_json[$board]['raw'];
             $manual = $board_json[$board]['manual'];
-            $cmd   = "ipmi-raw $manual $fanopts 2>&1 >/dev/null &";
+            ipmifan_run_raw($manual);
             break;
     }
-    shell_exec($cmd);
     sleep(10) ;
 }
 
 /* full speed fan */
 function fullfan() {
-    global $board_json, $board, $board_model, $cmd_count, $fanopts;
+    global $board_json, $board;
     fanlog('Setting fans to full speed');
     switch($board) {
         case "ASRock":
         case "ASRockRack":
-            //if board is ASRock
-            $cmd = '';
-            for($i = 0; $i <= $cmd_count; $i++){
-                $board0 = ($i == 0) ? $board : $board.$i;
-                $raw    = $board_json[$board0]['raw'];
-                $full   = $board_json[$board0]['full'];
-                $cmd   .= "ipmi-raw $raw $full $fanopts 2>&1 >/dev/null &";
-            }
+            ipmifan_run_commands(asrock_command_specs('full'), true);
             break;
         case "Supermicro":
-            //if board is Supermicro
             $full = $board_json[$board]['full'];
-            $cmd  = "ipmi-raw $full $fanopts 2>&1 >/dev/null &";
+            ipmifan_run_raw($full);
             break;
         case "Dell":
-            //if board is Dell
-            $raw    = $board_json[$board]['raw'];
             $full = $board_json[$board]['full'];
-            $cmd   = "ipmi-raw $full $fanopts 2>&1 >/dev/null &";
+            ipmifan_run_raw($full);
             break;  
     }
-    echo shell_exec($cmd);
     sleep(10);
+}
+
+function ipmifan_parse_smartctl_temperature($output) {
+    foreach ($output as $line) {
+        if (stripos($line, 'Temperature_Cel') === false)
+            continue;
+
+        $tokens = preg_split('/\s+/', trim((string)$line));
+        if (empty($tokens))
+            continue;
+
+        return preg_replace('/\s+/', '', (string)$tokens[count($tokens) - 1]);
+    }
+
+    return '';
 }
 
 /* get highest temp of hard drives */
@@ -319,11 +418,11 @@ function get_highest_temp(){
 
     //get UA devices
     $ua_json = '/var/state/unassigned.devices/hdd_temp.json';
-    $ua_devs = file_exists($ua_json) ? json_decode(file_get_contents($ua_json), true) : [];
+    $ua_devs = ipmi_read_json_config($ua_json);
 
     //get all hard drives
-    $disksini = parse_ini_file('/var/local/emhttp/disks.ini',true);
-    $devsini = parse_ini_file('/var/local/emhttp/devs.ini',true);
+    $disksini = ipmi_read_ini_config('/var/local/emhttp/disks.ini', true);
+    $devsini = ipmi_read_ini_config('/var/local/emhttp/devs.ini', true);
     if ($devsini) $hdds = array_merge($disksini, $devsini); else $hdds = $disksini ;
     unset($hdds['flash']);
 
@@ -337,8 +436,10 @@ function get_highest_temp(){
             elseif(!empty($ua_devs)){
                 $ua_key = "/dev/".$hdd['device'];
                 $temp = (array_key_exists($ua_key, $ua_devs)) ? $ua_devs[$ua_key]['temp'] : 0;
-            }else
-                $temp = preg_replace("/\s+/", "", shell_exec("smartctl -A -n standby /dev/{$hdd} 2>/dev/null| grep -m 1 -i Temperature_Cel | awk '{print $10}'"));
+            }else{
+                $smartctl = ipmi_run_process('smartctl', ['-A', '-n', 'standby', "/dev/{$hdd['device']}"], false);
+                $temp = ipmifan_parse_smartctl_temperature($smartctl['output']);
+            }
 
             $highest_temp = ($temp > $highest_temp) ? $temp : $highest_temp;
         }
@@ -349,15 +450,19 @@ function get_highest_temp(){
 
 /* get fan and temp sensors */
 function ipmi_fan_sensors() {
-    global $ipmi, $fanopts, $hdd_temp;
+    global $ipmi, $fanopt_args, $hdd_temp;
 
     // return empty array if no ipmi detected or network options
-    if(!$ipmi && empty($fanopts))
+    if(!$ipmi && empty($fanopt_args))
         return [];
 
-    $cmd = "/usr/sbin/ipmi-sensors --comma-separated-output --no-header-output --interpret-oem-data $fanopts 2>/dev/null";
-    $return_var=null ;
-    exec($cmd, $output, $return_var);
+    $result = ipmi_run_process(
+        '/usr/sbin/ipmi-sensors',
+        array_merge(['--comma-separated-output', '--no-header-output', '--interpret-oem-data'], $fanopt_args),
+        false
+    );
+    $output = $result['output'];
+    $return_var = $result['exit_code'];
 
     // return empty array if error
     if($return_var)
@@ -388,14 +493,15 @@ function ipmi_fan_sensors() {
 #####  PROGRAM SECTION  ######
 ##############################
 
-$MD5          = md5_file($fancfg_file);
-$hdd_temp     = get_highest_temp();
-$sensors      = ipmi_fan_sensors();
-$ipmipoll     = ($fanpoll <= $hddpoll) ? $fanpoll : $hddpoll;
-$fan_count    = $fanpoll * 10;
-$hdd_count    = $hddpoll * 10;
-$curent_hex   = '';
-$current_hex2 = '';
+$MD5                = md5_file($fancfg_file);
+$hdd_temp           = get_highest_temp();
+$sensors            = ipmi_fan_sensors();
+$ipmipoll           = ($fanpoll <= $hddpoll) ? $fanpoll : $hddpoll;
+$fan_poll_remaining = $fanpoll * 10;
+$hdd_poll_remaining = $hddpoll * 10;
+$current_hex        = [];
+$current_pwm        = '';
+$current_pwm2       = '';
 
 fanlog('Starting Fan Control');
 fanlog("Board: $board Board Model: $board_model");
@@ -407,31 +513,36 @@ if($board == 'Supermicro'){
 if($board == 'Dell'){
     manualfan();
 }
+if(has_asrock_manual_profile()){
+    manualfan();
+}
 
 while(TRUE){ while(TRUE){
 ####  DO YOUR STUFF HERE  ####
 
     /* Refresh hdds and hdd temp if hdd poll time is expired */
-    if ($hdd_count <= 0) {
-        $hdd_count = $hddpoll * 10;
+    if ($hdd_poll_remaining <= 0) {
+        $hdd_poll_remaining = $hddpoll * 10;
         $hdd_temp  = get_highest_temp();
         $sensors['99']['Reading'] = $hdd_temp;
     }
     /* Get sensor info if fan sensor poll time is expired */
-    if ($fan_count <= 0) {
-        $fan_count = $fanpoll * 10;
+    if ($fan_poll_remaining <= 0) {
+        $fan_poll_remaining = $fanpoll * 10;
         $sensors = ipmi_fan_sensors();
     }
 
     for($i = 0; $i <= $cmd_count; $i++){
-        $board0 = ($i == 0) ? $board : $board.$i;
-        $raw    = $board_json[$board0]['raw'];
-        $fans   = $board_json[$board0]['fans'];
+        $entry  = get_board_entry($i);
+        $raw    = $entry['raw'];
+        $fans   = is_array($entry['fans']) ? $entry['fans'] : [];
+        $pwm_prefix = isset($entry['pwm_prefix']) ? trim($entry['pwm_prefix']) : '';
+        $pwm_min = isset($entry['pwm_min']) ? intval($entry['pwm_min']) : 0;
         $hex    = '';
         $msg    = 'Fan:Temp';
-        $cmd    = '';
+        $commands = [];
         $exec   = false;
-        $fan_count  = 0;
+        $slot_index  = 0;
        # var_dump($fans,$raw) ;
 
         foreach($fans as $fan => $value){
@@ -450,7 +561,7 @@ while(TRUE){ while(TRUE){
                 $reading = floatval($sensors[$temp]['Reading']);
                 $name    = htmlspecialchars($sensors[$temp]['Name']);
                 $use_override = false;
-                if ($temp = "99" && $reading <= 0) {
+                if ($temp == "99" && $reading <= 0) {
                     if (isset($fancfg["TEMPHDD_$fan"]) &&  $fancfg["TEMPHDD_$fan"] != 0) {
                     $temp=    $fancfg["TEMPHDD_$fan"] ;
                     $reading = floatval($sensors[$temp]['Reading']);
@@ -503,6 +614,10 @@ while(TRUE){ while(TRUE){
                         $pct  = $fanmax/$range;
                     }
                 }
+                if (is_asrock_family() && $pwm_min > 1 && $pwm < $pwm_min){
+                    $pwm = $pwm_min;
+                    $pct = $pwm_min/$range;
+                }
                 //convert pwm to hexadecimal
                 if($range == 255){
                     $pwm = dechex($pwm);
@@ -517,101 +632,53 @@ while(TRUE){ while(TRUE){
                 $msg .= ", {$fan}({$pct}%):".str_replace('Temperature','Temp',$name)."($mytemp)";
 
            }else{
-                $pwm ='00';
+                $pwm = (is_asrock_family() && $pwm_min > 1) ? str_pad($pwm_min, 2, '0', STR_PAD_LEFT) : '00';
            }
 
            switch($board) {
             case "ASRock":
             case "ASRockRack":
-                switch($board_model) {
-                    case 'EP2C612 WS':
-                        $hex .= " $pwm";
-                        break;
-                    default:
-                        //add value to hex for Asrock boards
-                        if($cmd_count !== 0 && $fan_count == 0){
-                            // set value for CPU fans for dual sockets
-                            if($pwm == '00'){
-                                $hex .= ' 00 00';
-                            }else{
-                                $hex .= " 01 $pwm";
-                            }
-
-                        }else{
-                            $hex .= " $pwm";
-                        }
-                        break;
-                }
+                $hex .= build_asrock_pwm_segment($pwm, $slot_index, $pwm_prefix);
                 break;
             case "Supermicro":
-                //create command for Supermicro
-                $cmd_str = "ipmi-raw $raw $value $pwm $fanopts 2>&1; ";
-                //check if new pwm for FAN1234 then add to cmd string
                 if(($value == '00' || $value == '10') && $current_pwm !== $pwm && $pwm !== '00'){
-                    $cmd .= $cmd_str;
-
-                    //set current value for next loop
+                    $commands[] = ['raw' => trim($raw.' '.$value.' '.$pwm)];
                     $current_pwm  = $pwm;
                     $exec = true;
                 }
-                // check if new pwm for FANA then add to cmd string
                 if(($value == '01' || $value == '11') && $current_pwm2 !== $pwm && $pwm !== '00'){
-                    $cmd .= $cmd_str;
-
-                    //set current value for next loop
+                    $commands[] = ['raw' => trim($raw.' '.$value.' '.$pwm)];
                     $current_pwm2 = $pwm;
                     $exec = true;
                 }
                 break;
             case "Dell":
-               # echo $pwm;
-               # $pwm = "05" ;
-                #fanlog($msg);
                 if(($value == '00' || $value == '10') && $current_pwm !== $pwm && $pwm !== '00'){
-                    $cmd = "ipmi-raw $raw $pwm $fanopts 2>&1; ";
+                    $commands[] = ['raw' => trim($raw.' '.$pwm)];
                     $current_pwm  = $pwm;
-                    
                     $exec = true;
                 }
                 break;
             }
-            $fan_count++;
+            $slot_index++;
         }
         switch($board) {
             case "ASRock":
             case "ASRockRack":
             //compare last value to new value for Asrock boards
-            $cmd_str = "ipmi-raw $raw$hex $fanopts 2>&1; ";
+            $payload = build_asrock_pwm_payload($hex, $pwm_prefix);
 
-            if($i == 0){
-
-                if($current_hex !== $hex){
-                    $cmd = $cmd_str;
-
-                    //set current value for next loop
-                    $current_hex = $hex;
-                    $exec = true;
-                }
-            }else{
-
-                if($current_hex2 !== $hex){
-                    $cmd = $cmd_str;
-
-                    //set 2nd current value for next loop
-                    $current_hex2 = $hex;
-                    $exec = true;
-                }
+            if(!array_key_exists($i, $current_hex) || $current_hex[$i] !== $hex){
+                $commands[] = ['raw' => $raw, 'payload' => $payload];
+                $current_hex[$i] = $hex;
+                $exec = true;
             }
             break;
         }
 
         // execute command if exec set
         if($exec){
-            shell_exec($cmd);
-            #fanlog($cmd);
-            if($debug)
-                fanlog($cmd);
-
+            ipmifan_run_commands($commands);
             //log changes
             fanlog($msg);
         }
@@ -631,13 +698,13 @@ while(TRUE){ while(TRUE){
 
     for ($i=0; $i < $ipmipoll ; $i++) {
         sleep(10);
-        $fan_count = $fan_count - 10;
-        $hdd_count = $hdd_count - 10;
+        $fan_poll_remaining = $fan_poll_remaining - 10;
+        $hdd_poll_remaining = $hdd_poll_remaining - 10;
 
         $MD5_new = md5_file($fancfg_file);
         if((file_exists($fancfg_file)) && ($MD5_new != $MD5)){
             $msg = 'fan control config file updated, reloading settings';
-            $fancfg = parse_ini_file($fancfg_file);
+            $fancfg = ipmi_load_fan_config();
             logger($msg, $argq);
             $MD5 = $MD5_new;
             fanlog($msg);

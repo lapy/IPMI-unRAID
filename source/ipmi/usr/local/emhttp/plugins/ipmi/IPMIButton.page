@@ -2,7 +2,7 @@ Menu="Buttons:2"
 Link="nav-user"
 Markdown="false"
 ---
-<?PHP
+<?php
 /* Copyright 2015, Bergware International.
  *
  * This program is free software; you can redistribute it and/or
@@ -17,9 +17,13 @@ Markdown="false"
 ?>
 
 <script>
+window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
+</script>
+<script src="<?=autov('/plugins/ipmi/js/ipmi-api.js');?>"></script>
+<script>
 function ipmiTemp() {
-  $.get('/plugins/ipmi/include/ipmi_temp.php',{unit:'<?=$display['unit']?>',dot:'<?=$display['number'][0]?>'},function(data) {
-    if (data) showFooter(data,'ipmitemps');
+  ipmiPost('/plugins/ipmi/include/ipmi_temp.php',{unit:'<?=$display['unit']?>',dot:'<?=$display['number'][0]?>'},function(data) {
+    if (data.html) showFooter(data.html,'ipmitemps');
     timers.ipmiTemp = setTimeout(ipmiTemp,20000);
   });
 }

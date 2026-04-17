@@ -1,30 +1,39 @@
-<?
+<?php
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_options.php';
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_drives.php';
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_fan_profiles.php';
 require_once '/usr/local/emhttp/plugins/dynamix/include/Helpers.php';
 
-$action = array_key_exists('action', $_GET) ? htmlspecialchars($_GET['action']) : '';
+$action = htmlspecialchars((string)ipmi_array_get($_REQUEST, 'action', ''));
 $hdd_temp = get_highest_temp();
-extract(parse_plugin_cfg('dynamix',true));
-if (isset($display['unit'])) $display_unit = $display['unit']; else $display_unit = "C";
+$display = ipmi_get_display_preferences();
+$display_unit = ipmi_array_get($display, 'unit', 'C');
+
+function ipmi_output_helper_response($payload) {
+    if (strtoupper((string)ipmi_array_get($_SERVER, 'REQUEST_METHOD', 'GET')) === 'POST') {
+        ipmi_require_csrf();
+        ipmi_json_response(true, 'ok', $payload);
+    }
+
+    if (!headers_sent())
+        header('Content-Type: application/json');
+    echo json_encode($payload);
+    exit(0);
+}
 
 if (!empty($action)) {
     $state = ['Critical' => 'red', 'Warning' => 'yellow', 'Nominal' => 'green', 'N/A' => 'blue'];
     if ($action === 'ipmisensors'){
-        $return  = ['Sensors' => ipmi_sensors($ignore),'Network' => ($netsvc === 'enable'),'State' => $state];
-        echo json_encode($return);
+        ipmi_output_helper_response(['Sensors' => ipmi_sensors($ignore),'Network' => ($netsvc === 'enable'),'State' => $state]);
     }
     elseif($action === 'ipmievents'){
-        $return  = ['Events' => ipmi_events(),'Network' => ($netsvc === 'enable'),'State' => $state];
-        echo json_encode($return);
+        ipmi_output_helper_response(['Events' => ipmi_events(),'Network' => ($netsvc === 'enable'),'State' => $state]);
     }
     elseif($action === 'ipmiarch'){
-        $return  = ['Archives' => ipmi_events(true), 'Network' => ($netsvc === 'enable'), 'State' => $state];
-        echo json_encode($return);
+        ipmi_output_helper_response(['Archives' => ipmi_events(true), 'Network' => ($netsvc === 'enable'), 'State' => $state]);
     }
     elseif($action === 'ipmidash') {
-        $return  = ['Sensors' => ipmi_sensors($dignore), 'Network' => ($netsvc === 'enable'),'State' => $state];
-        echo json_encode($return);
+        ipmi_output_helper_response(['Sensors' => ipmi_sensors($dignore), 'Network' => ($netsvc === 'enable'),'State' => $state]);
     }
 }
 
@@ -35,10 +44,13 @@ function get_highest_temp(){
 
     //get UA devices
     $ua_json = '/var/state/unassigned.devices/hdd_temp.json';
-    $ua_devs = file_exists($ua_json) ? json_decode(file_get_contents($ua_json), true) : [];
+    $ua_devs = ipmi_read_json_config($ua_json);
 
     //get all hard drives
-    $hdds = array_merge(parse_ini_file('/var/local/emhttp/disks.ini',true), parse_ini_file('/var/local/emhttp/devs.ini',true));
+    $hdds = array_merge(
+        ipmi_read_ini_config('/var/local/emhttp/disks.ini', true),
+        ipmi_read_ini_config('/var/local/emhttp/devs.ini', true)
+    );
 
     $highest_temp = 0;
     foreach ($hdds as $hdd) {
@@ -71,7 +83,9 @@ function ipmi_sensors($ignore='') {
     $cmd = '/usr/sbin/ipmi-sensors --output-sensor-thresholds --comma-separated-output '.
         "--output-sensor-state --no-header-output --interpret-oem-data $netopts $ignored 2>/dev/null";
     $return_var=null ;    
-    exec($cmd, $output, $return_var);
+    $result = ipmi_run_command($cmd, false);
+    $output = $result['output'];
+    $return_var = $result['exit_code'];
 
     // return empty array if error
     if ($return_var)
@@ -133,7 +147,9 @@ function ipmi_events($archive=null){
         $cmd = '/usr/sbin/ipmi-sel --comma-separated-output --output-event-state --no-header-output '.
             "--interpret-oem-data --output-oem-event-strings $netopts 2>/dev/null";
         $return_var=null ;
-        exec($cmd, $output, $return_var);
+        $result = ipmi_run_command($cmd, false);
+        $output = $result['output'];
+        $return_var = $result['exit_code'];
     }
 
     // return empty array if error
@@ -244,7 +260,7 @@ function get_content_from_github($repo, $file) {
     $content = curl_exec($ch);
     curl_close($ch);
     if (!empty($content) && (!is_file($file) || $content != file_get_contents($file)))
-        file_put_contents($file, $content);
+        ipmi_atomic_write($file, $content);
 }
 
 
@@ -262,7 +278,9 @@ function ipmi_fan_sensors($ignore=null) {
     $ignored = (empty($ignore)) ? '' : "-R $ignore";
     $cmd = "/usr/sbin/ipmi-sensors --comma-separated-output --no-header-output --interpret-oem-data $fanopts $ignored 2>/dev/null";
     $return_var=null ;
-    exec($cmd, $output, $return_var);
+    $result = ipmi_run_command($cmd, false);
+    $output = $result['output'];
+    $return_var = $result['exit_code'];
 
     if ($return_var)
         return []; // return empty array if error
@@ -296,17 +314,29 @@ function ipmi_fan_sensors($ignore=null) {
 
 /* get all fan options for fan control */
 function get_fanctrl_options(){
-    global $fansensors, $fancfg, $board, $board_json, $board_file_status, $board_status, $cmd_count, $range, $display_unit;
+    global $fansensors, $fancfg, $board, $board_model, $board_json, $board_file_status, $board_status, $cmd_count, $range, $display_unit;
     if($board_status) {
         $i = 0;
         $fan1234 = 0;
         $sysfan = 0;
         $cpufan = 0;
+        $board_profile = ipmi_resolve_asrock_fan_profile($board, $board_model, $board_json);
+        $seen_asrock_fans = [];
         foreach($fansensors as $id => $fan){
             if($i > 11) break;
             if ($fan['Type'] === 'Fan'){
-                $name    = htmlspecialchars($fan['Name']);
+                $raw_name = $fan['Name'];
+                $name    = htmlspecialchars($raw_name);
                 $display = $name;
+                if(($board === 'ASRock' || $board === 'ASRockRack') && !empty($board_profile)) {
+                    $canonical_name = ipmi_canonicalize_asrock_fan_name_for_profile($board_profile, $raw_name);
+                    if (array_key_exists($canonical_name, $seen_asrock_fans))
+                        continue;
+
+                    $seen_asrock_fans[$canonical_name] = true;
+                    $name = htmlspecialchars($canonical_name);
+                    $display = ($canonical_name === $raw_name) ? $name : htmlspecialchars($canonical_name.' / '.$raw_name);
+                }
                 if($board === 'Supermicro'){
                     $syscpu = false;
                     if(strpos ($name, 'SYS_FAN') !== false){
@@ -362,11 +392,23 @@ function get_fanctrl_options(){
                 $fanmaxo  = 'FANMAXO_'.$name;
                 $fanmino  = 'FANMINO_'.$name;
 
+                $fan_configured = false;
+                if($board_file_status){
+                    if (isset($board_json[$board]['fans']) && array_key_exists($name, $board_json[$board]['fans'])) {
+                        $fan_configured = true;
+                    } elseif ($cmd_count !== 0 && isset($board_json["{$board}1"]['fans']) && array_key_exists($name, $board_json["{$board}1"]['fans'])) {
+                        $fan_configured = true;
+                    }
+                }
+
+                echo '<section class="ipmi-fan-card', ($fan_configured ? '' : ' needs-mapping'), '" data-fan-name="', $name, '">';
+                echo '<div class="ipmi-fan-card-header"><h4>', $display, '</h4><span class="ipmi-fan-card-status ', ($fan_configured ? 'ok' : 'warn'), '">', ($fan_configured ? 'Mapped' : 'Needs Mapping'), '</span></div>';
+
                 // hidden fan id
                 echo '<input type="hidden" name="FAN_',$name,'" value="',$id,'"/>';
 
                 // fan name: reading => temp name: reading
-                echo '<dl><dt>',$display,' (',floatval($fan['Reading']),' ',$fan['Units'],'):</dt><span class="fanctrl-basic">';
+                echo '<div class="ipmi-fan-card-summary"><dl class="ipmi-fan-summary"><dt>',$display,' (',floatval($fan['Reading']),' ',$fan['Units'],'):</dt><dd><span class="fanctrl-basic">';
                 if ($temp['Name']){
                     echo $temp['Name'],' ('.my_temp(floatval($temp['Reading'])),' ','), ',
                     $fancfg[$templo],', ',$fancfg[$temphi],', ',number_format((intval(intval($fancfg[$fanmin])/$range*1000)/10),1),'-',number_format((intval(intval($fancfg[$fanmax])/$range*1000)/10),1),'%';
@@ -376,7 +418,7 @@ function get_fanctrl_options(){
                 
                 echo $display,' (',floatval($fan['Reading']),' ',$fan['Units'],'):';
                 if (isset($temphddd['Name'])){
-                    echo "&nbsp;&nbsp;&nbsp;&nbsp;Override:".$temphddd['Name'].' ('.my_temp(floatval($temp['Reading'])),' ','), ',
+                    echo '&nbsp;&nbsp;&nbsp;&nbsp;Override:'.$temphddd['Name'].' ('.my_temp(floatval($temp['Reading'])),' ','), ',
                     $fancfg[$temploo],', ',$fancfg[$temphio],', ',number_format((intval(intval($fancfg[$fanmino])/$range*1000)/10),1),'-',number_format((intval(intval($fancfg[$fanmaxo])/$range*1000)/10),1),'%';
                 }else{
                     echo 'Not Defined';
@@ -385,19 +427,10 @@ function get_fanctrl_options(){
 
                 // check if board.json exists then if fan name is in board.json
                 $noconfig = '<font class="red"><b><i> (fan is not configured!)</i></b></font>';
-                if($board_file_status){
-                    if(!array_key_exists($name, $board_json[$board]['fans']))
-                        if ($cmd_count !== 0){
-                            if(!array_key_exists($name, $board_json["{$board}1"]['fans']))
-                                echo $noconfig;
-                        }else{
-                            echo $noconfig;
-                        }
-                } else {
+                if(!$fan_configured)
                     echo $noconfig;
-                }
 
-                echo '</dd></dl>';
+                echo '</dd></dl></div><div class="ipmi-fan-card-controls">';
 
                 // temperature sensor
                 echo '<dl class="fanctrl-settings">',
@@ -469,13 +502,14 @@ function get_fanctrl_options(){
                '</select></dd></dl>';
 
               // fan control minimum speed Spundown
-              echo '<dl class="fanctrl-settings">',
-              '<dt><dl><dd>Fan speed minimum Spundown (%):</dd></dl></dt><dd>',
-              '<select name="', $fanmino, '" class="', $tempid, ' fanctrl-settings">',
-              get_minmax_options('LO', $fancfg[$fanmino]),
-            '</select></dd></dl>&nbsp;';
-            }
+	              echo '<dl class="fanctrl-settings">',
+	              '<dt><dl><dd>Fan speed minimum Spundown (%):</dd></dl></dt><dd>',
+	              '<select name="', $fanmino, '" class="', $tempid, ' fanctrl-settings">',
+	              get_minmax_options('LO', $fancfg[$fanmino]),
+	            '</select></dd></dl>&nbsp;';
+	            }
 
+                echo '</div></section>';
                 $i++;
             }
         }

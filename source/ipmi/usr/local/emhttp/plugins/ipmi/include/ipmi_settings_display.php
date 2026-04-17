@@ -1,7 +1,10 @@
-<?
+<?php
 /* get display temps and fans */
-$disp_sensor1 = isset($cfg['DISP_SENSOR1']) ? htmlspecialchars($cfg['DISP_SENSOR1']) : '';
-$disp_sensor2 = isset($cfg['DISP_SENSOR2']) ? htmlspecialchars($cfg['DISP_SENSOR2']) : '';
-$disp_sensor3 = isset($cfg['DISP_SENSOR3']) ? htmlspecialchars($cfg['DISP_SENSOR3']) : '';
-$disp_sensor4 = isset($cfg['DISP_SENSOR4']) ? htmlspecialchars($cfg['DISP_SENSOR4']) : '';
+$footer_sensor_slots = 8;
+$disp_sensors = [];
+
+for ($i = 1; $i <= $footer_sensor_slots; $i++) {
+    $disp_sensors[$i] = isset($cfg["DISP_SENSOR$i"]) ? htmlspecialchars($cfg["DISP_SENSOR$i"]) : '';
+    ${"disp_sensor$i"} = $disp_sensors[$i];
+}
 ?>

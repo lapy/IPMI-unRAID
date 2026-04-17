@@ -1,122 +1,104 @@
-<?
+<?php
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_options.php';
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_check.php';
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_config_store.php';
 
 $usage = <<<EOF
 
-Usage: $prog [options]
+Usage: ipmi_config.php [options]
 
-  -c, --commit   commit
-  -s, --sensors   sensors config
-      --debug      turn on debugging
-      --help         display this help and exit
+  -c, --commit     commit saved config to the BMC
+  -s, --sensors    use the sensor config
+      --help       display this help and exit
       --version    output version information and exit
-
 
 EOF;
 
-$shortopts = 'cs';
-$longopts = [
-    'commit',
-    'debug',
-    'sensors',
-    'help',
-    'version'
-];
-$args = getopt($shortopts, $longopts);
+if (PHP_SAPI === 'cli') {
+    $shortopts = 'cs';
+    $longopts = ['commit', 'sensors', 'help', 'version'];
+    $args = getopt($shortopts, $longopts);
 
-if (array_key_exists('help', $args)) {
-    echo $usage.PHP_EOL;
-    exit(0);
-}
+    if (array_key_exists('help', $args)) {
+        echo $usage.PHP_EOL;
+        exit(0);
+    }
 
-if (array_key_exists('version', $args)) {
-    echo 'IPMI Sensors Config: 1.0'.PHP_EOL;
-    exit(0);
+    if (array_key_exists('version', $args)) {
+        echo 'IPMI Sensors Config: 2.0'.PHP_EOL;
+        exit(0);
+    }
+} else {
+    ipmi_require_post_request();
+    ipmi_require_csrf();
+    $args = [];
 }
 
 $arg_commit = (array_key_exists('c', $args) || array_key_exists('commit', $args));
 $arg_sensors = (array_key_exists('s', $args) || array_key_exists('sensors', $args));
+$config_id = intval(ipmi_array_get($_POST, 'config', -1));
+$commit = (bool)ipmi_array_get($_POST, 'commit', false) || $arg_commit;
 
-if(isset($_POST['config']) && $_POST['config'] == "2") {
-    $config_file = "$plg_path/board.json";
-    $return = NULL ;
-    $commit     = array_key_exists('commit', $_POST);
-    $config = (array_key_exists('ipmicfg', $_POST)) ? str_replace("\r", '', $_POST['ipmicfg']) : '';
+function ipmi_config_editor_response($config_file, $message='Configuration loaded.') {
+    $config_text = is_file($config_file) ? file_get_contents($config_file) : '';
+    ipmi_json_response(true, $message, ['config' => $config_text]);
+}
+
+if ($config_id === 2) {
+    $config_file = ipmi_plugin_config_path('board.json');
+    $config = str_replace("\r", '', (string)ipmi_array_get($_POST, 'ipmicfg', ''));
+
     if ($commit) {
-        if (file_put_contents($config_file, $config) === false ) {
-            $return = [
-                'error' => $output,
-                'success' => false];
-            $return_var = true;
-        } else  $return_var = NULL;
-    }
-} else {
-    $cmd_sensors = ($arg_sensors || ($_POST['config'])) ? '-sensors' : '';
+        $decoded = json_decode($config, true);
+        if (!is_array($decoded))
+            ipmi_json_response(false, 'board.json is not valid JSON.', [], [json_last_error_msg()]);
 
-    $config_file = "$plg_path/ipmi{$cmd_sensors}.config";
-    $cmd          = "/usr/sbin/ipmi{$cmd_sensors}-config --filename=$config_file ";
-    $commit     = array_key_exists('commit', $_POST);
+        $normalized = ipmi_normalize_board_config($board, $board_model, $decoded);
+        $errors = ipmi_validate_board_config($normalized);
+        if (!empty($errors))
+            ipmi_json_response(false, 'board.json validation failed.', [], $errors);
 
-    // remove carriage returns
-    $config = (array_key_exists('ipmicfg', $_POST)) ? str_replace("\r", '', $_POST['ipmicfg']) : '';
+        if (!ipmi_save_board_config($normalized))
+            ipmi_json_response(false, 'Unable to save board.json.', [], [$config_file]);
 
-    // get previous config file contents
-    $config_old = (file_exists($config_file)) ? file_get_contents($config_file) : '';
-
-    if(($arg_commit) && (!empty($config_old))){
-        $config = $config_old;
+        ipmi_config_editor_response($config_file, 'board.json saved.');
     }
 
-    if($commit && !empty($config)){
-        // save config file changes
-        file_put_contents($config_file, $config);
-        $cmd .= "--commit $netopts 2>&1";
-        $return_var = NULL ;
-        exec($cmd, $output, $return_var);
-    }else{
-        $cmd .= "--checkout $netopts 2>/dev/null";
-        $return_var=NULL ;
-        exec($cmd, $output, $return_var);
-        $return_var=NULL ;
+    if (!is_file($config_file)) {
+        $example_board = ($board === 'ASRock' || $board === 'ASRockRack') ? $board : 'ASRockRack';
+        ipmi_json_response(true, 'Using generated board.json example.', [
+            'config' => ipmi_json_pretty(ipmi_get_asrock_board_json_example($example_board, $board_model)),
+        ]);
     }
+
+    ipmi_config_editor_response($config_file);
 }
 
+$cmd_suffix = ($arg_sensors || $config_id === 1) ? '-sensors' : '';
+$config_file = ipmi_plugin_config_path('ipmi'.$cmd_suffix.'.config');
+$binary = "/usr/sbin/ipmi{$cmd_suffix}-config";
+$config = str_replace("\r", '', (string)ipmi_array_get($_POST, 'ipmicfg', ''));
+$config_old = is_file($config_file) ? file_get_contents($config_file) : '';
 
-if($return_var){
+if ($arg_commit && $config_old !== '' && $config === '')
+    $config = $config_old;
 
-    // revert config file if there's an error with commit
-    if(($commit) && !empty($config_old))
-        file_put_contents($config_file, $config_old);
+if ($commit && $config !== '') {
+    if (!ipmi_atomic_write($config_file, $config))
+        ipmi_json_response(false, 'Unable to save the staged IPMI config.', [], [$config_file]);
 
-    $return = [
-        'error' => $output,
-        'success' => false];
-}else{
-    $return = [
-        'config' => file_get_contents($config_file),
-        'success' => true];
-    if(isset($_POST['config']) && $_POST['config'] == "2" && $return['config'] == false)
-        {
-            $return['config'] = '
-{
-    "ASRockRack": {
-        "raw": "00 3a 01",
-        "auto": "00 00 00 00 00 00 00 00",
-        "full": "64 64 64 64 64 64 64 64",
-        "fans": {
-            "CPU1_FAN1": "01",
-            "CPU2_FAN1": "01",
-            "REAR_FAN1": "01",
-            "NOT_AVAILABLE": "01",
-            "FRNT_FAN1": "01",
-            "FRNT_FAN2": "01",
-            "FRNT_FAN3": "01",
-            "FRNT_FAN4": "11"
-        }
+    $result = ipmi_run_process($binary, array_merge(["--filename=$config_file", '--commit'], $netopt_args));
+    if (!$result['success']) {
+        if ($config_old !== '')
+            ipmi_atomic_write($config_file, $config_old);
+        ipmi_json_response(false, 'Commit to the BMC failed.', [], $result['output']);
     }
+
+    ipmi_config_editor_response($config_file, 'Configuration committed to the BMC.');
 }
-            ' ;
-        }
-}
-echo json_encode($return);
-?>
+
+$result = ipmi_run_process($binary, array_merge(["--filename=$config_file", '--checkout'], $netopt_args), false);
+if (!$result['success'])
+    ipmi_json_response(false, 'Unable to load configuration from the BMC.', [], $result['output']);
+
+ipmi_config_editor_response($config_file, 'Configuration loaded from the BMC.');

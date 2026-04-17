@@ -1,18 +1,15 @@
-<?
+<?php
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_options.php';
 
-$cmd1 = "ipmi-sensors -f $netopts";
-exec($cmd1, $output1, $return_var1);
+ipmi_require_post_request();
+ipmi_require_csrf();
 
-$cmd2 = "bmc-device --cold-reset $netopts";
-exec($cmd2, $output2, $return_var2);
+$sensor_check = ipmi_run_process('ipmi-sensors', array_merge(['-f'], $netopt_args));
+$reset = ipmi_run_process('bmc-device', array_merge(['--cold-reset'], $netopt_args));
 
-if($return_var1 || $return_var2){
-    $return = ['error' => $output1.PHP_EOL.$output2,
-        'success' => false];
-}else{
-    $return = ['success' => true];
+if (!$sensor_check['success'] || !$reset['success']) {
+    $errors = array_filter([$sensor_check['text'], $reset['text']]);
+    ipmi_json_response(false, 'BMC reset failed.', [], $errors);
 }
 
-echo json_encode($return);
-?>
+ipmi_json_response(true, 'BMC reset requested successfully.');

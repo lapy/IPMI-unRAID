@@ -455,14 +455,18 @@ function get_fanctrl_options(){
 
         echo '</div>';
 
-        echo '<div class="ipmi-fan-card-controls">';
+        echo '<div class="ipmi-fan-card-controls" role="region" aria-label="Tuning controls for ', $display, '">';
         echo '<div class="ipmi-fan-control-grid">';
+
+        echo '<div class="ipmi-fan-field-group fanctrl-settings">';
+        echo '<h5 class="ipmi-fan-field-group__title">Primary temperature curve</h5>';
+        echo '<p class="ipmi-fan-field-group__hint">Between the low and high thresholds the daemon ramps duty toward your minimum and maximum. Duty percentages use the board PWM scale (0–', intval($range), ').</p>';
 
         echo '<div class="ipmi-field fanctrl-settings">';
         echo '<label class="ipmi-field__label" for="', $tempid, '">Temperature sensor</label>';
         echo '<select id="', $tempid, '" name="', $tempid, '" class="fanctrl-temp" data-fan-name="', $name, '">';
         echo '<option value="0">Auto</option>', get_temp_options($fancfg[$tempid]), '</select>';
-        echo '<div class="ipmi-field__help">Sensor used for the primary fan curve.</div>';
+        echo '<div class="ipmi-field__help">Firmware-managed curve when set to <strong>Auto</strong>. Choose a specific sensor for a custom curve. Pick <strong>HDD Temperature</strong> to enable the spindown override section below.</div>';
         echo '</div>';
 
         echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $tempid, '">';
@@ -488,6 +492,12 @@ function get_fanctrl_options(){
         echo '<select id="', $fanmin, '" name="', $fanmin, '" class="', $tempid, '">', get_minmax_options('LO', $fancfg[$fanmin]), '</select>';
         echo '<div class="ipmi-field__help">Prevents the header from dropping below this duty percentage.</div>';
         echo '</div>';
+
+        echo '</div>';
+
+        echo '<div class="ipmi-fan-field-group fanctrl-settings">';
+        echo '<h5 class="ipmi-fan-field-group__title">HDD spindown override</h5>';
+        echo '<p class="ipmi-fan-field-group__hint">Active only when the primary sensor above is <strong>HDD Temperature</strong>. When drives spin down, this second curve and duty limits apply instead of the primary curve.</p>';
 
         echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $tempid, '">';
         echo '<label class="ipmi-field__label" for="', $temphdd, '">HDD spindown sensor</label>';
@@ -518,6 +528,8 @@ function get_fanctrl_options(){
         echo '<label class="ipmi-field__label" for="', $fanmino, '">Override minimum duty</label>';
         echo '<select id="', $fanmino, '" name="', $fanmino, '" class="', $temphdd, '">', get_minmax_options('LO', $fancfg[$fanmino]), '</select>';
         echo '<div class="ipmi-field__help">Minimum duty while the spindown override is active.</div>';
+        echo '</div>';
+
         echo '</div>';
 
         echo '</div>';

@@ -3,6 +3,11 @@ Title="Config Editor"
 Tag="cogs"
 Markdown="false"
 ---
+<?php
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_runtime.php';
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_quick_nav.php';
+$ipmi_fan_menu_visible = ipmi_fan_control_menu_tab_visible();
+?>
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/ipmi.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/webGui/styles/jquery.switchbutton.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/codemirror/codemirror.min.css');?>">
@@ -24,6 +29,8 @@ Markdown="false"
         </div>
     </div>
 
+    <?php ipmi_render_quick_nav_strip('editor', ['show_fan' => $ipmi_fan_menu_visible]); ?>
+
     <div class="ipmi-alert ipmi-alert--warning">
         <p><strong>Edit carefully.</strong> These files can change credentials, networking, sensor thresholds, boot devices, and other low-level BMC behavior.</p>
         <p><strong>Editor shortcuts:</strong> Ctrl/Cmd-F search, Ctrl/Cmd-G next, Shift-Ctrl/Cmd-G previous, Shift-Ctrl/Cmd-F replace, Shift-Ctrl/Cmd-R replace all.</p>
@@ -39,6 +46,17 @@ Markdown="false"
                     <option>Json</option>
                 </select>
                 <span class="status" id="load-switch" hidden><input type="checkbox" id="autoload-switch"></span>
+            </div>
+
+            <div class="ipmi-editor-extras" id="ipmi-editor-extras" hidden>
+                <button type="button" class="ipmi-inline-button" id="ipmi-editor-download" title="Save the current editor text to your computer">Download buffer</button>
+                <button type="button" class="ipmi-inline-button" id="ipmi-editor-validate-json" title="Parse as JSON before saving board.json" hidden>Validate JSON</button>
+                <span class="ipmi-inline-help" id="ipmi-editor-json-msg" role="status"></span>
+                <span class="ipmi-editor-board-tools" id="ipmi-editor-board-tools" hidden>
+                    <label for="ipmi-board-backup-select" class="ipmi-field__label" style="display:inline;margin-right:8px;">board.json backup</label>
+                    <select id="ipmi-board-backup-select" name="ipmi_board_backup"></select>
+                    <button type="button" class="ipmi-inline-button" id="ipmi-board-restore">Restore selected</button>
+                </span>
             </div>
 
             <textarea id="editcfg" name="ipmicfg" placeholder="Select IPMI Configuration above." autocomplete="" focus></textarea>
@@ -99,6 +117,22 @@ $(function(){
         else
             $('#load-switch').hide();
 
+        $('#ipmi-editor-json-msg').text('');
+        if (Config >= 0) {
+            $('#ipmi-editor-extras').prop('hidden', false);
+        } else {
+            $('#ipmi-editor-extras').prop('hidden', true);
+        }
+
+        if (Config === 2) {
+            $('#ipmi-editor-validate-json').prop('hidden', false);
+            $('#ipmi-editor-board-tools').prop('hidden', false);
+            loadBoardJsonBackups();
+        } else {
+            $('#ipmi-editor-validate-json').prop('hidden', true);
+            $('#ipmi-editor-board-tools').prop('hidden', true);
+        }
+
         if (Config != -1){
             $('#ipmiconfig').val(Config);
             ipmiPost('/plugins/ipmi/include/ipmi_config.php', {ipmicfg:null, config:Config}, function (data) {
@@ -108,6 +142,43 @@ $(function(){
         }else{
             editor.setValue('');
         }
+    });
+
+    $('#ipmi-editor-download').on('click', function () {
+        var idx = $('#editfile')[0].selectedIndex;
+        var names = ['ipmi-config.txt', 'ipmi-sensors-config.txt', 'board.json'];
+        var name = (idx >= 1 && idx <= 3) ? names[idx - 1] : 'ipmi-export.txt';
+        var blob = new Blob([editor.getValue()], { type: 'text/plain;charset=utf-8' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        ipmiFlashBanner('Download started for ' + name + '.', 'success');
+    });
+
+    $('#ipmi-editor-validate-json').on('click', function () {
+        $('#ipmi-editor-json-msg').text('');
+        try {
+            JSON.parse(editor.getValue());
+            $('#ipmi-editor-json-msg').text('JSON is valid.');
+            ipmiFlashBanner('JSON parses successfully.', 'success');
+        } catch (err) {
+            $('#ipmi-editor-json-msg').text(err.message || 'Invalid JSON');
+            ipmiFlashBanner('JSON validation failed.', 'error');
+        }
+    });
+
+    $('#ipmi-board-restore').on('click', function () {
+        var name = $('#ipmi-board-backup-select').val();
+        if (!name) {
+            ipmiFlashBanner('No backup selected.', 'error');
+            return;
+        }
+        ipmiPost('/plugins/ipmi/include/ipmi_plugin_tools.php', { tool: 'board_backup_restore', backup: name }, function() {
+            $('#editfile').trigger('change');
+            ipmiFlashBanner('Restored ' + name + '. Reloaded editor buffer.', 'success');
+        }, null, { button: document.getElementById('ipmi-board-restore'), showSuccessBanner: false });
     });
 
     var editor = CodeMirror.fromTextArea($('#editcfg')[0], {
@@ -136,9 +207,32 @@ $(function(){
 });
 
 
+function loadBoardJsonBackups() {
+    ipmiPost('/plugins/ipmi/include/ipmi_plugin_tools.php', { tool: 'board_backup_list' }, function(data) {
+        var sel = $('#ipmi-board-backup-select');
+        sel.empty();
+        var files = data.files || [];
+        if (!files.length) {
+            sel.append($('<option>').val('').text('No backups found'));
+            return;
+        }
+        files.forEach(function(f) {
+            sel.append($('<option>').val(f).text(f));
+        });
+    });
+}
+
 function commitConfig() {
     var Config = $('#editfile')[0].selectedIndex -1;
     if (Config != -1){
+        if (Config === 2) {
+            try {
+                JSON.parse(editor.getValue());
+            } catch (err) {
+                ipmiFlashBanner('Fix JSON before saving: ' + (err.message || 'parse error'), 'error');
+                return;
+            }
+        }
         $('#ipmiconfig').val(Config);
         ipmiPost('/plugins/ipmi/include/ipmi_config.php', $('#cfgform').serializeArray(),function (data, response) {
             swal({title:'IPMI Sensors Configuration',text:response.message || 'saved',type:'success',closeOnConfirm: true,},function() {
@@ -146,7 +240,7 @@ function commitConfig() {
             });
         }, function(response) {
             swal({title:'IPMI Sensors Configuration',text:ipmiResponseText(response),type:'error'});
-        });
+        }, { button: document.getElementById('btnSubmit') });
     }
 }
 

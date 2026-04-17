@@ -3,6 +3,13 @@ Title="Event Log"
 Tag="file"
 Markdown="false"
 ---
+<?php
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_options.php';
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_runtime.php';
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_quick_nav.php';
+$ipmi_fan_menu_visible = ipmi_fan_control_menu_tab_visible();
+$ipmi_daemon_snapshot = ipmi_daemon_running_flags();
+?>
 <link type="text/css" rel="stylesheet" href="<?=autov('/webGui/styles/jquery.switchbutton.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/ipmi.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/tablesorter.css');?>">
@@ -13,6 +20,7 @@ Markdown="false"
         <div>
             <h1>Event Log</h1>
             <p>Search, filter, and triage current SEL-derived events. Archive mode keeps deleted entries on flash storage for later review.</p>
+            <p class="ipmi-tool-meta">Event notifications: <?= $ipmi_daemon_snapshot['seld'] ? 'running' : 'stopped'; ?>. Network BMCs: <?= ($netsvc === 'enable') ? 'enabled' : 'disabled'; ?>.</p>
         </div>
         <div class="ipmi-switch-meta">
             <span class="ipmi-switch-label">Archive deleted events</span>
@@ -20,18 +28,20 @@ Markdown="false"
         </div>
     </div>
 
+    <?php ipmi_render_quick_nav_strip('events', ['show_fan' => $ipmi_fan_menu_visible]); ?>
+
     <div class="ipmi-table-shell">
         <table class="tablesorter shift hover-highlight events" id="tblEvent">
             <thead>
                 <tr>
-                    <th class="sorter-false filter-false"> Status </th>
-                    <th class="network sorter-ipv4Address filter-ip" data-placeholder="by IP Address"> IP Address </th>
-                    <th class="filter-false"> Event ID </th>
-                    <th class="filter-time" data-placeholder="by timestamp"> Timestamp </th>
-                    <th class="filter-name" data-placeholder="Search..."> Sensor Name </th>
-                    <th class="filter-type" data-placeholder="by type"> Sensor Type </th>
-                    <th class="filter-desc" data-placeholder="Search..."> Description </th>
-                    <th class="filter-false sorter-false"><a id='allEvents' title='clear all'><i class="fa fa-trash"> Clear All </i></a></th>
+                    <th scope="col" class="sorter-false filter-false"> Status </th>
+                    <th scope="col" class="network sorter-ipv4Address filter-ip" data-placeholder="by IP Address"> IP Address </th>
+                    <th scope="col" class="filter-false"> Event ID </th>
+                    <th scope="col" class="filter-time" data-placeholder="by timestamp"> Timestamp </th>
+                    <th scope="col" class="filter-name" data-placeholder="Search..."> Sensor Name </th>
+                    <th scope="col" class="filter-type" data-placeholder="by type"> Sensor Type </th>
+                    <th scope="col" class="filter-desc" data-placeholder="Search..."> Description </th>
+                    <th scope="col" class="filter-false sorter-false"><button type="button" class="ipmi-table-action" id="allEvents" title="Clear all events from this view"><i class="fa fa-trash" aria-hidden="true"></i> Clear all</button></th>
                 </tr>
             </thead>
             <tbody>

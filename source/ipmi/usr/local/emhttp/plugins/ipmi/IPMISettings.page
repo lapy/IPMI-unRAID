@@ -6,10 +6,12 @@ Markdown="false"
 ---
 <?php require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_settings.php';?>
 <?php
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_quick_nav.php';
 $version_check = version_compare(parse_ini_file('/etc/unraid-version')['version'], '7.1.99', '>');
 $footer_enabled_count = count(array_filter($disp_sensors));
 $network_enabled = ($netsvc === 'enable');
 $override_enabled = ($override === 'enable');
+$ipmi_fan_menu_visible = ipmi_fan_control_menu_tab_visible();
 ?>
 
 <link type="text/css" rel="stylesheet" href="<?=autov('/webGui/styles/jquery.switchbutton.css');?>">
@@ -69,7 +71,33 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
         </section>
     </div>
 
-    <section class="ipmi-section-card">
+    <div class="ipmi-hub-strip">
+        <nav class="ipmi-hub-strip__nav" aria-label="IPMI areas">
+            <a class="ipmi-hub-strip__link" href="/Settings/IPMITools" data-ipmi-tools-tab="tab1">Sensors</a>
+            <a class="ipmi-hub-strip__link" href="/Settings/IPMITools" data-ipmi-tools-tab="tab2">Event log</a>
+            <a class="ipmi-hub-strip__link" href="/Settings/IPMITools" data-ipmi-tools-tab="tab3">Archived events</a>
+            <?php if ($ipmi_fan_menu_visible): ?>
+            <a class="ipmi-hub-strip__link" href="/Settings/IPMI" data-ipmi-settings-tab="tab2">Fan control</a>
+            <?php endif; ?>
+            <a class="ipmi-hub-strip__link" href="/Settings/IPMI" data-ipmi-settings-tab="tab3">Config editor</a>
+            <button type="button" class="ipmi-hub-strip__link ipmi-hub-strip__btn" id="ipmi-diag-export" title="Download redacted ipmi.cfg, fan.cfg, and board.json">Export diagnostics</button>
+        </nav>
+    </div>
+
+    <?php if (!$ipmi_fan_menu_visible): ?>
+    <div class="ipmi-alert ipmi-alert--info" style="margin-bottom:var(--ipmi-space-5);">
+        <p><strong>Fan control tab hidden.</strong> The menu entry appears only when board override is enabled in <code>ipmi.cfg</code> or when DMI reports ASRock, ASRockRack, Dell, or Supermicro. Other boards can still use sensors, events, and dashboard features.</p>
+    </div>
+    <?php endif; ?>
+
+    <nav class="ipmi-anchor-nav" aria-label="On this page">
+        <a href="#ipmi-section-connection">Connection</a>
+        <a href="#ipmi-section-events">Events</a>
+        <a href="#ipmi-section-display">Display</a>
+        <a href="#ipmi-section-footer">Footer</a>
+    </nav>
+
+    <section class="ipmi-section-card" id="ipmi-section-connection">
         <div class="ipmi-card-header">
             <div>
                 <h3>Connection and Board Detection</h3>
@@ -114,6 +142,10 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
                     <label class="ipmi-field__label" for="IPADDR">IP Address(es)</label>
                     <input id="IPADDR" type="text" class="ipmi-run ipmi-lan ipmi-ipaddr" name="IPADDR" maxlength="66" value="<?=htmlspecialchars($ipaddr);?>" title="IPMI IP address">
                     <div class="ipmi-field__help">Add up to four IPMI targets, comma-separated. Current status: <?=$conn;?></div>
+                    <div class="ipmi-field__help ipmi-connection-test-wrap">
+                        <button type="button" class="ipmi-inline-button" id="ipmi-connection-test" title="Run a non-destructive ipmi-sensors probe with current settings">Test BMC connection</button>
+                        <span id="ipmi-connection-test-hint" class="ipmi-inline-help"></span>
+                    </div>
                 </div>
                 <div class="ipmi-field ipmi-lan">
                     <label class="ipmi-field__label" for="USER">User Name</label>
@@ -178,17 +210,21 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
                 </div>
             </div>
 
-            <div class="ipmi-actions">
-                <input class="ipmi-run" type="button" id="ipmi-default" value="Default">
-                <input type="button" value="Reset BMC" id="bmc-reset" title="Do a cold reset of the BMC">
-                <input id="btnApply" type="submit" value="Apply">
-                <input type="button" value="Done" onClick="done()">
+            <div class="ipmi-actions ipmi-actions--split">
+                <div class="ipmi-actions__group">
+                    <input class="ipmi-run" type="button" id="ipmi-default" value="Default">
+                    <input id="btnApply" type="submit" value="Apply">
+                    <input type="button" value="Done" onClick="done()">
+                </div>
+                <div class="ipmi-actions__group ipmi-actions--dangerous" title="Interrupts BMC services">
+                    <input type="button" value="Reset BMC" id="bmc-reset" title="Do a cold reset of the BMC (destructive)">
+                </div>
             </div>
         </form>
     </section>
 
     <div class="ipmi-section-grid">
-        <section class="ipmi-section-card">
+        <section class="ipmi-section-card" id="ipmi-section-events">
             <div class="ipmi-card-header">
                 <div>
                     <h3>Event Notifications</h3>
@@ -239,7 +275,7 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
             </form>
         </section>
 
-        <section class="ipmi-section-card">
+        <section class="ipmi-section-card" id="ipmi-section-display">
             <div class="ipmi-card-header">
                 <div>
                     <h3>Display Surfaces</h3>
@@ -294,7 +330,7 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
         </section>
     </div>
 
-    <section class="ipmi-section-card">
+    <section class="ipmi-section-card" id="ipmi-section-footer">
         <div class="ipmi-card-header">
             <div>
                 <h3>Footer Display</h3>
@@ -359,6 +395,23 @@ $(function(){
 
     $('#bmc-reset').click(resetBMC);
     $('#btnTest').click(EventTest);
+
+    $('#ipmi-connection-test').on('click', function() {
+        var btn = this;
+        $('#ipmi-connection-test-hint').text('');
+        ipmiPost('/plugins/ipmi/include/ipmi_plugin_tools.php', { tool: 'connection_test' }, function(data, resp) {
+            $('#ipmi-connection-test-hint').text(resp.message || '');
+            ipmiFlashBanner(resp.message || 'BMC responded.', 'success');
+        }, function(resp) {
+            var t = ipmiResponseText(resp);
+            $('#ipmi-connection-test-hint').text(t);
+            ipmiFlashBanner(t, 'error');
+        }, { button: btn });
+    });
+
+    $('#ipmi-diag-export').on('click', function() {
+        ipmiSubmitToolDownload('diag_download');
+    });
 
     $('#tab5').click(function() {
         $.cookie('one', 'tab1', { expires:null, path: '/'});
@@ -478,6 +531,10 @@ function decData() {
     $('#PASSWORD').val(atob($('#PASSWORD').val()));
 }
 
+/**
+ * Progressive disclosure for connection UI: .ipmi-lan tracks NETWORK;
+ * .ipmi-override / .ipmi-model / .ipmi-count track OVERRIDE + OBOARD (see checkOVERRIDE).
+ */
 function checkNETWORK() {
     if ($('#NETWORK')[0].selectedIndex < 1) {
         $('.ipmi-lan').hide();
@@ -523,7 +580,7 @@ function EventTest() {
             showCancelButton: false,
             closeOnConfirm: true
         });
-    });
+    }, null, { button: document.getElementById('btnTest') });
 }
 
 function resetBMC() {

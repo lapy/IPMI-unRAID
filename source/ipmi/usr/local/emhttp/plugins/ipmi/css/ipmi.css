@@ -70,6 +70,10 @@ body.azure.dark {
     margin-top: -26px;
 }
 
+.ipmi-fan-page #adv-switch {
+    margin-top: 0;
+}
+
 #load-switch {
     margin-top: -32px;
 }
@@ -433,6 +437,180 @@ select.display {
     justify-content: space-between;
 }
 
+.ipmi-actions__group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ipmi-space-3);
+}
+
+.ipmi-actions--dangerous {
+    border-left: 3px solid var(--ipmi-color-danger);
+    padding-left: var(--ipmi-space-4);
+    margin-left: var(--ipmi-space-2);
+}
+
+.ipmi-actions--dangerous input[type="button"] {
+    border: 1px solid var(--ipmi-color-danger-soft);
+    background: var(--ipmi-color-danger-soft);
+    color: var(--ipmi-color-danger);
+}
+
+.ipmi-hub-strip {
+    margin: 0 0 var(--ipmi-space-5);
+    padding: var(--ipmi-space-4) var(--ipmi-space-5);
+    border-radius: var(--ipmi-radius-md);
+    border: 1px solid var(--ipmi-color-border);
+    background: var(--ipmi-color-surface);
+    box-shadow: var(--ipmi-shadow-sm);
+}
+
+.ipmi-hub-strip__nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ipmi-space-2) var(--ipmi-space-3);
+}
+
+.ipmi-hub-strip__link,
+.ipmi-hub-strip__btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--ipmi-color-border);
+    background: var(--ipmi-color-surface-soft);
+    color: var(--ipmi-color-primary);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.ipmi-hub-strip__btn {
+    color: var(--ipmi-color-text);
+}
+
+.ipmi-anchor-nav {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ipmi-space-2) var(--ipmi-space-4);
+    margin: 0 0 var(--ipmi-space-5);
+    padding: var(--ipmi-space-3) var(--ipmi-space-4);
+    border-radius: var(--ipmi-radius-md);
+    border: 1px solid var(--ipmi-color-border);
+    background: var(--ipmi-color-surface-soft);
+    backdrop-filter: blur(10px);
+}
+
+.ipmi-anchor-nav a {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ipmi-color-primary);
+    text-decoration: none;
+}
+
+.ipmi-quick-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ipmi-space-2) var(--ipmi-space-3);
+    margin: 0 0 var(--ipmi-space-5);
+    padding: var(--ipmi-space-3) var(--ipmi-space-4);
+    border-radius: var(--ipmi-radius-md);
+    border: 1px dashed var(--ipmi-color-border);
+    background: var(--ipmi-color-surface-soft);
+}
+
+.ipmi-quick-nav__label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ipmi-color-text-soft);
+    margin-right: var(--ipmi-space-2);
+}
+
+.ipmi-quick-nav__link {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ipmi-color-primary);
+    text-decoration: none;
+}
+
+.ipmi-quick-nav__link.is-active {
+    color: var(--ipmi-color-text);
+    text-decoration: underline;
+}
+
+.ipmi-tool-meta {
+    margin: calc(-1 * var(--ipmi-space-3)) 0 var(--ipmi-space-4);
+    font-size: 13px;
+    color: var(--ipmi-color-text-soft);
+}
+
+.ipmi-inline-button {
+    margin-top: var(--ipmi-space-2);
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--ipmi-color-border);
+    background: var(--ipmi-color-surface);
+    color: var(--ipmi-color-primary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.ipmi-inline-help {
+    margin-left: var(--ipmi-space-3);
+    font-size: 13px;
+    color: var(--ipmi-color-text-soft);
+}
+
+.ipmi-flash {
+    margin: 0 0 var(--ipmi-space-4);
+    padding: var(--ipmi-space-3) var(--ipmi-space-4);
+    border-radius: var(--ipmi-radius-sm);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.ipmi-flash--success {
+    border: 1px solid var(--ipmi-color-success-soft);
+    background: var(--ipmi-color-success-soft);
+    color: var(--ipmi-color-success);
+}
+
+.ipmi-flash--error {
+    border: 1px solid var(--ipmi-color-danger-soft);
+    background: var(--ipmi-color-danger-soft);
+    color: var(--ipmi-color-danger);
+}
+
+.ipmi-shell .is-busy {
+    cursor: wait;
+}
+
+.ipmi-table-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ipmi-color-danger);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+}
+
 .ipmi-actions--sticky {
     position: sticky;
     bottom: var(--ipmi-space-4);
@@ -773,6 +951,131 @@ body.azure.dark .ipmi-fan-card {
     border-top: 1px solid var(--ipmi-color-border);
 }
 
+.ipmi-fan-field-group {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--ipmi-space-3) var(--ipmi-space-4);
+    margin-bottom: var(--ipmi-space-4);
+    padding: var(--ipmi-space-4);
+    border: 1px solid var(--ipmi-color-border);
+    border-radius: var(--ipmi-radius-sm);
+    background: var(--ipmi-color-surface-soft);
+}
+
+.ipmi-fan-field-group:last-of-type {
+    margin-bottom: 0;
+}
+
+.ipmi-fan-field-group__title,
+.ipmi-fan-field-group__hint {
+    grid-column: 1 / -1;
+}
+
+.ipmi-fan-field-group__title {
+    margin: 0 0 var(--ipmi-space-2);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ipmi-color-text-soft);
+}
+
+.ipmi-fan-field-group__hint {
+    margin: 0 0 var(--ipmi-space-3);
+    color: var(--ipmi-color-text-soft);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.ipmi-fan-mode-hint {
+    margin: 0 0 var(--ipmi-space-4);
+    color: var(--ipmi-color-text-soft);
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+.ipmi-fan-glossary {
+    margin: 0 0 var(--ipmi-space-5);
+    padding: var(--ipmi-space-3) var(--ipmi-space-4);
+    border: 1px dashed var(--ipmi-color-border);
+    border-radius: var(--ipmi-radius-md);
+    background: var(--ipmi-color-surface);
+}
+
+.ipmi-fan-glossary summary {
+    cursor: pointer;
+    font-weight: 700;
+    color: var(--ipmi-color-primary);
+}
+
+.ipmi-fan-glossary__body {
+    margin-top: var(--ipmi-space-3);
+}
+
+.ipmi-fan-config-context {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ipmi-space-2);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    margin-bottom: var(--ipmi-space-2);
+    padding: var(--ipmi-space-3) var(--ipmi-space-4);
+    border-radius: var(--ipmi-radius-md);
+    border: 1px solid var(--ipmi-color-border);
+    background: var(--ipmi-color-surface);
+    box-shadow: var(--ipmi-shadow-sm);
+}
+
+.ipmi-fan-context-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--ipmi-color-primary-soft);
+    color: var(--ipmi-color-primary);
+}
+
+.ipmi-fan-context-pill--neutral {
+    background: var(--ipmi-color-surface-soft);
+    color: var(--ipmi-color-text);
+}
+
+.ipmi-fan-context-pill--ok {
+    background: var(--ipmi-color-success-soft);
+    color: var(--ipmi-color-success);
+}
+
+.ipmi-fan-context-pill--warn {
+    background: var(--ipmi-color-warning-soft);
+    color: var(--ipmi-color-warning);
+}
+
+.ipmi-fan-context-pill--quiet {
+    opacity: 0.85;
+    font-weight: 600;
+}
+
+.ipmi-fan-context-footnote {
+    margin: 0 0 var(--ipmi-space-4);
+    font-size: 12px;
+    color: var(--ipmi-color-text-soft);
+}
+
+.ipmi-fan-card.needs-mapping {
+    border-color: rgba(185, 119, 14, 0.55);
+    box-shadow: 0 0 0 1px var(--ipmi-color-warning-soft);
+}
+
+.ipmi-fan-card-controls select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
 .ipmi-fan-card .fanctrl-basic {
     display: block;
 }
@@ -826,6 +1129,21 @@ body.azure.dark .ipmi-fan-card {
     gap: var(--ipmi-space-3);
     align-items: center;
     margin-bottom: var(--ipmi-space-4);
+}
+
+.ipmi-editor-extras {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ipmi-space-3);
+    margin-bottom: var(--ipmi-space-4);
+}
+
+.ipmi-editor-board-tools {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ipmi-space-2);
 }
 
 .ipmi-editor-toolbar .status {

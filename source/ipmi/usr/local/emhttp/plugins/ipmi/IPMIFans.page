@@ -5,6 +5,7 @@ Markdown="false"
 Cond="exec(\"grep -o '^OVERRIDE=.enable' /boot/config/plugins/ipmi/ipmi.cfg 2>/dev/null\") || array_key_exists(trim(shell_exec(\"dmidecode -t 2 | grep 'Manufacturer' | awk -F 'r:' '{print $2}' | awk '{print $1}'\")), ['ASRock'=>'','ASRockRack'=>'','Dell'=>'','Supermicro'=>''])"
 ---
 <?php
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_quick_nav.php';
 $asrock_scan_supported = ($board === 'ASRock' || $board === 'ASRockRack');
 $mapping_ready = $board_file_status && ($board_profile_expected === 0 || $board_profile_mapped > 0);
 $mapping_complete = $board_file_status && ($board_profile_expected === 0 || $board_profile_mapped >= $board_profile_expected);
@@ -43,6 +44,8 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
             </div>
         </aside>
     </section>
+
+    <?php ipmi_render_quick_nav_strip('fans', ['show_fan' => true]); ?>
 
     <div class="ipmi-summary-grid">
         <section class="ipmi-summary-card">
@@ -205,12 +208,36 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
             </div>
             <div class="ipmi-switch-meta">
                 <span class="ipmi-switch-label">Advanced tuning</span>
-                <input type="checkbox" id="advancedview">
+                <span id="adv-switch" class="status"><input type="checkbox" id="advancedview" aria-describedby="fan-advanced-mode-hint"></span>
             </div>
         </div>
 
+        <p class="ipmi-fan-mode-hint" id="fan-advanced-mode-hint"></p>
+
+        <details class="ipmi-fan-glossary">
+            <summary>How fan curves and overrides work</summary>
+            <div class="ipmi-fan-glossary__body">
+                <ul class="ipmi-list">
+                    <li><strong>Auto</strong> leaves this header on the BMC firmware curve for the primary sensor choice.</li>
+                    <li><strong>Custom curve</strong> uses your low/high temperature thresholds and min/max duty between them.</li>
+                    <li><strong>HDD Temperature</strong> as the primary sensor unlocks the spindown override block so you can set a quieter curve while array disks are parked.</li>
+                    <li><strong>Apply</strong> at the bottom commits every header on this page together; use validation messages to fix one header at a time.</li>
+                </ul>
+            </div>
+        </details>
+
         <form id="fanctrl_options" name="fanctrl_options" method="POST" action="/update.php" target="progressFrame">
             <input type="hidden" name="#file" value="ipmi/fan.cfg" />
+
+            <div id="fan-configurator-context" class="ipmi-fan-config-context" role="status" aria-live="polite">
+                <span class="ipmi-fan-context-pill" id="fan-ctx-headers"></span>
+                <span class="ipmi-fan-context-pill ipmi-fan-context-pill--neutral" id="fan-ctx-mapping"></span>
+                <span class="ipmi-fan-context-pill ipmi-fan-context-pill--neutral" id="fan-ctx-curve"></span>
+                <span class="ipmi-fan-context-pill ipmi-fan-context-pill--neutral" id="fan-ctx-override"></span>
+                <span class="ipmi-fan-context-pill ipmi-fan-context-pill--neutral" id="fan-ctx-daemon"></span>
+                <span class="ipmi-fan-context-pill ipmi-fan-context-pill--quiet" id="fan-ctx-view"></span>
+            </div>
+            <p class="ipmi-fan-context-footnote">Changes on this page are not sent to the BMC until you press <strong>Apply</strong> below.</p>
 
             <div class="ipmi-form-grid">
                 <div class="ipmi-field ipmi-field--full">
@@ -301,10 +328,15 @@ if(is_file($log)){
             </div>
         </aside>
     </section>
+    <?php ipmi_render_quick_nav_strip('fans', ['show_fan' => true]); ?>
     <div class="ipmi-alert ipmi-alert--danger">
         <p><strong>Unsupported board.</strong> Add or select a supported profile in Settings before enabling fan control.</p>
     </div>
 </div>
+<script>
+window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
+</script>
+<script src="<?=autov('/plugins/ipmi/js/ipmi-api.js');?>"></script>
 <?php endif; ?>
 
 <script>
@@ -330,6 +362,7 @@ $(function(){
     .change(function () {
         $.cookie('fanctrl_view_mode', $('#advancedview')[0].checked ? 'advanced' : 'basic', { expires: 3650 });
         toggleFanCTRL();
+        updateFanAdvancedHint();
     });
 
     $('.fanctrl-temp').on('change', function() {
@@ -341,13 +374,17 @@ $(function(){
 
     syncAllFanControls();
     toggleFanCTRL();
+    updateFanAdvancedHint();
 
     $('#btnConfig').click(function() {
         openBox('/plugins/ipmi/scripts/ipmi2json', 'IPMI Fan Config', 600, 900, true);
     });
 
     $('#FAN_DEFAULT').click(resetFANDATA);
-    $('#FANCONTROL').change(checkFANCTRL);
+    $('#FANCONTROL').change(function() {
+        checkFANCTRL();
+        refreshFanConfiguratorBar();
+    });
     $('#fanctrl_options').on('submit', validateFanConfig);
     checkFANCTRL();
 
@@ -534,6 +571,61 @@ function syncAllFanControls() {
     });
 }
 
+function updateFanAdvancedHint() {
+    var adv = $.cookie('fanctrl_view_mode') == 'advanced';
+    $('#fan-advanced-mode-hint').text(adv
+        ? 'Advanced: every threshold and duty control is shown. The summary strip above tracks mapping, custom curves, and HDD overrides across all headers.'
+        : 'Basic: each card shows a readable summary. Enable Advanced tuning to edit thresholds, duties, and spindown overrides.');
+}
+
+function refreshFanConfiguratorBar() {
+    var $ctx = $('#fan-configurator-context');
+    if (!$ctx.length)
+        return;
+
+    var cards = $('.ipmi-fan-card').length;
+    var needMap = $('.ipmi-fan-card.needs-mapping').length;
+    var overrides = 0;
+    var customCurves = 0;
+
+    $('.ipmi-fan-card').each(function() {
+        var fan = $(this).data('fanName');
+        var hdd = $('select[name="TEMPHDD_' + fan + '"]').val();
+        if (hdd && hdd !== '0')
+            overrides++;
+
+        var temp = $('select[name="TEMP_' + fan + '"]').val();
+        if (temp && temp !== '0')
+            customCurves++;
+    });
+
+    $('#fan-ctx-headers').text(cards + ' fan header' + (cards === 1 ? '' : 's'));
+
+    var $map = $('#fan-ctx-mapping');
+    if (needMap) {
+        $map.removeClass('ipmi-fan-context-pill--ok').addClass('ipmi-fan-context-pill--warn')
+            .text(needMap + ' header' + (needMap === 1 ? '' : 's') + ' still need board.json mapping');
+    } else {
+        $map.removeClass('ipmi-fan-context-pill--warn').addClass('ipmi-fan-context-pill--ok')
+            .text('Header mapping complete');
+    }
+
+    $('#fan-ctx-curve').text(customCurves + ' custom primary curve' + (customCurves === 1 ? '' : 's'));
+
+    var $ov = $('#fan-ctx-override');
+    if (overrides) {
+        $ov.removeClass('ipmi-fan-context-pill--quiet').text(overrides + ' HDD spindown override' + (overrides === 1 ? '' : 's'));
+    } else {
+        $ov.addClass('ipmi-fan-context-pill--quiet').text('No HDD overrides active');
+    }
+
+    var daemon = $('#FANCONTROL').val() === 'enable';
+    $('#fan-ctx-daemon').text(daemon ? 'Apply will start or keep the fan daemon' : 'Apply will stop the fan daemon if running');
+
+    var adv = $.cookie('fanctrl_view_mode') == 'advanced';
+    $('#fan-ctx-view').text(adv ? 'Editor: advanced fields visible' : 'Editor: basic summaries only');
+}
+
 function toggleFanCTRL() {
     var advanced = $.cookie('fanctrl_view_mode') == 'advanced';
     $('.fanctrl-basic').toggle(!advanced);
@@ -553,6 +645,7 @@ function toggleFanCTRL() {
         var enabled = (!control.length || control.val() !== '0');
         $(this).toggle(enabled);
     });
+    refreshFanConfiguratorBar();
 }
 <?php endif; ?>
 </script>

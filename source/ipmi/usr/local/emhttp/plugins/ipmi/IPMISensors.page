@@ -4,6 +4,11 @@ Icon="heartbeat"
 Tag="heartbeat"
 Markdown="true"
 ---
+<?php
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_runtime.php';
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_quick_nav.php';
+$ipmi_fan_menu_visible = ipmi_fan_control_menu_tab_visible();
+?>
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/ipmi.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/tablesorter.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/tablesorter-'.(($display['theme'] == 'white' || $display['theme'] == 'azure') ? 'white' : 'black').'.css');?>">
@@ -21,6 +26,8 @@ Markdown="true"
         </div>
     </div>
 
+    <?php ipmi_render_quick_nav_strip('sensors', ['show_fan' => $ipmi_fan_menu_visible]); ?>
+
     <div class="ipmi-alert ipmi-alert--info">
         <p>Basic view focuses on the current reading, while advanced view exposes lower and upper threshold values from the BMC.</p>
     </div>
@@ -29,18 +36,18 @@ Markdown="true"
         <table class="tablesorter shift hover-highlight sensors" id="tblSensor">
             <thead>
                 <tr>
-                    <th class="sorter-false filter-false"> Status </th>
-                    <th class="network sorter-ipv4Address filter-ip" data-placeholder="by ip address"> IP Address </th>
-                    <th class="advanced filter-false"> ID </th>
-                    <th class="filter-false"> Sensor </th>
-                    <th class="advanced filter-false"> Lower <br> Non-Recover </th>
-                    <th class="advanced filter-false"> Lower <br> Critical </th>
-                    <th class="advanced filter-false"> Lower <br> Non-Critical </th>
-                    <th class="filter-reading" data-placeholder="by status"> Reading </th>
-                    <th class="filter-type" data-placeholder="by type"> Type </th>
-                    <th class="advanced filter-false"> Upper <br> Non-Critical </th>
-                    <th class="advanced filter-false"> Upper <br> Critical </th>
-                    <th class="advanced filter-false"> Upper <br> Non-Recover </th>
+                    <th scope="col" class="sorter-false filter-false"> Status </th>
+                    <th scope="col" class="network sorter-ipv4Address filter-ip" data-placeholder="by ip address"> IP Address </th>
+                    <th scope="col" class="advanced filter-false"> ID </th>
+                    <th scope="col" class="filter-false"> Sensor </th>
+                    <th scope="col" class="advanced filter-false"> Lower <br> Non-Recover </th>
+                    <th scope="col" class="advanced filter-false"> Lower <br> Critical </th>
+                    <th scope="col" class="advanced filter-false"> Lower <br> Non-Critical </th>
+                    <th scope="col" class="filter-reading" data-placeholder="by status"> Reading </th>
+                    <th scope="col" class="filter-type" data-placeholder="by type"> Type </th>
+                    <th scope="col" class="advanced filter-false"> Upper <br> Non-Critical </th>
+                    <th scope="col" class="advanced filter-false"> Upper <br> Critical </th>
+                    <th scope="col" class="advanced filter-false"> Upper <br> Non-Recover </th>
                 </tr>
             </thead>
             <tbody>
@@ -64,12 +71,6 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
 
 <script>
 $(function(){
-        
-    if ($('.tabs-container').length) {
-        $('.tabs-container').append('<button role="tab" name="tabs2" id="tab4" aria-controls="tab4-panel" tabindex="-1" aria-selected="false"><span><i class="icon fa fa-cog title"></i>Settings</span></button>');
-    } else {
-        $('.tabs').append('<div class="tab"><input type="radio" name="tabs2" id="tab4"><label for="tab4"><i class="icon fa fa-cog"></i>Settings</label></div>');
-    }
 
     <?php if (function_exists('plugin_update_available') && $version = plugin_update_available('ipmi')): ?>
         showNotice('IPMI <?=$version?> available. <a>Update</a>','ipmi');
@@ -77,16 +78,6 @@ $(function(){
             $('#user-notice').empty();
         });
     <?php endif; ?>
-
-    $('.settings').click(function() {
-        $.cookie('one', 'tab1', { expires:null, path: '/'});
-        location = '/Settings/IPMI';
-    });
-
-    $('#tab4').click(function() {
-        $.cookie('one', 'tab1', { expires:null, path: '/'});
-        location = '/Settings/IPMI';
-    });
 
     //advanced view switch set cookie and toggle advanced columns
     $('#advancedview').switchButton({

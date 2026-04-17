@@ -1,6 +1,7 @@
 Menu="Dashboard"
 Cond="parse_ini_file('/boot/config/plugins/ipmi/ipmi.cfg')['DASH'] == 'enable' && version_compare(parse_ini_file('/etc/unraid-version')['version'],'6.12.0-beta6', '<')"
 ---
+<?php /* Legacy dashboard widget (pre-6.12.0-beta6). Newer Unraid uses IPMIDashmovable.page for the movable tile. */ ?>
 
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/ipmi.css');?>">
 <script>

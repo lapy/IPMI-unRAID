@@ -94,6 +94,25 @@ function ipmi_ensure_directory($directory) {
     return @mkdir($directory, 0777, true);
 }
 
+function ipmi_remove_tree($dir) {
+    if (!is_dir($dir))
+        return;
+
+    $items = @scandir($dir) ?: [];
+    foreach ($items as $item) {
+        if ($item === '.' || $item === '..')
+            continue;
+
+        $path = $dir.'/'.$item;
+        if (is_dir($path))
+            ipmi_remove_tree($path);
+        else
+            @unlink($path);
+    }
+
+    @rmdir($dir);
+}
+
 function ipmi_build_backup_path($path) {
     return sprintf('%s.bak.%s', $path, date('YmdHis'));
 }
@@ -343,6 +362,31 @@ function ipmi_get_display_preferences() {
     $display = ipmi_array_get($config, 'display', []);
 
     return is_array($display) ? $display : [];
+}
+
+/**
+ * Matches the Unraid .page Cond on IPMIFans (override flag in ipmi.cfg or supported DMI manufacturer).
+ */
+function ipmi_fan_control_menu_tab_visible() {
+    $cfgfile = ipmi_plugin_config_path('ipmi.cfg');
+    $override_cfg = false;
+    if (is_readable($cfgfile)) {
+        $raw = @file_get_contents($cfgfile);
+        if (is_string($raw) && preg_match('/^OVERRIDE=.enable/m', $raw))
+            $override_cfg = true;
+    }
+
+    $manufacturer = trim((string)ipmi_read_dmi_field(2, 'Manufacturer'));
+    $supported = ['ASRock' => true, 'ASRockRack' => true, 'Dell' => true, 'Supermicro' => true];
+
+    return $override_cfg || isset($supported[$manufacturer]);
+}
+
+function ipmi_daemon_running_flags() {
+    return [
+        'seld' => ipmi_is_service_running('/var/run/ipmiseld.pid'),
+        'fanctrl' => ipmi_is_service_running('/var/run/ipmifan.pid'),
+    ];
 }
 
 function ipmi_validate_csrf_token($token) {

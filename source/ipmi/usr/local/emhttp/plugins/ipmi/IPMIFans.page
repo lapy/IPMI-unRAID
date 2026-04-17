@@ -5,9 +5,8 @@ Markdown="false"
 Cond="exec(\"grep -o '^OVERRIDE=.enable' /boot/config/plugins/ipmi/ipmi.cfg 2>/dev/null\") || array_key_exists(trim(shell_exec(\"dmidecode -t 2 | grep 'Manufacturer' | awk -F 'r:' '{print $2}' | awk '{print $1}'\")), ['ASRock'=>'','ASRockRack'=>'','Dell'=>'','Supermicro'=>''])"
 ---
 <?php
-require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_quick_nav.php';
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_config_store.php';
 $asrock_scan_supported = ($board === 'ASRock' || $board === 'ASRockRack');
-$mapping_ready = $board_file_status && ($board_profile_expected === 0 || $board_profile_mapped > 0);
 $mapping_complete = $board_file_status && ($board_profile_expected === 0 || $board_profile_mapped >= $board_profile_expected);
 $mapping_status_class = $mapping_complete ? 'success' : 'warning';
 $fan_status_class = $fanctrl_run ? 'success' : 'warning';
@@ -18,18 +17,20 @@ $fan_status_class = $fanctrl_run ? 'success' : 'warning';
 <?php if ($board_status !== false): ?>
 <script>
 window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
+window.IPMI_FAN_PWM_RANGE = <?=max(1, intval($range));?>;
 </script>
 <script src="<?=autov('/plugins/ipmi/js/ipmi-api.js');?>"></script>
 <script src="<?=autov('/webGui/javascript/jquery.switchbutton.js');?>"></script>
+<script src="<?=autov('/plugins/ipmi/js/ipmi-fan-curve.js');?>"></script>
 
 <div class="ipmi-shell ipmi-fan-page">
-    <section class="ipmi-page-hero">
+    <section class="ipmi-page-hero ipmi-page-hero--no-strip">
         <div class="ipmi-page-hero__main">
             <div class="ipmi-page-hero__eyebrow">Cooling Control</div>
             <h1>Fan Control</h1>
             <p>Manage daemon state, polling cadence, header mapping, and per-header curves from one responsive control surface. The layout is tuned for day-to-day tuning instead of raw config editing.</p>
         </div>
-        <aside class="ipmi-page-hero__aside">
+        <aside class="ipmi-page-hero__aside" aria-label="Board and fan control status">
             <div class="ipmi-hero-stat">
                 <div class="ipmi-hero-stat__label">Detected Board</div>
                 <div class="ipmi-hero-stat__value"><?=$board." ".$board_model." ".$sm_gen?></div>
@@ -41,38 +42,10 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
             <div class="ipmi-hero-stat">
                 <div class="ipmi-hero-stat__label">Profile</div>
                 <div class="ipmi-hero-stat__value"><?=htmlspecialchars($board_profile_label);?></div>
+                <div class="ipmi-hero-stat__hint"><?=($asrock_scan_supported ? 'Scan-assisted mapping' : 'Built-in profile defaults');?></div>
             </div>
         </aside>
     </section>
-
-    <?php ipmi_render_quick_nav_strip('fans', ['show_fan' => true]); ?>
-
-    <div class="ipmi-summary-grid">
-        <section class="ipmi-summary-card">
-            <h4>Runtime</h4>
-            <p>Fan daemon state is surfaced directly here so you can see whether live control is active before changing any settings.</p>
-            <strong><?=($fanctrl_run ? 'Running' : 'Stopped');?></strong>
-            <p><span class="ipmi-status-badge <?=$fan_status_class;?>"><?=($fanctrl_run ? 'Daemon Active' : 'Daemon Idle');?></span></p>
-        </section>
-        <section class="ipmi-summary-card">
-            <h4>Profile</h4>
-            <p>Board-specific command behavior is normalized through the active fan profile.</p>
-            <strong><?=htmlspecialchars($board_profile_label);?></strong>
-            <p><?=($asrock_scan_supported ? 'Header mapping is profile-aware and scan-assisted.' : 'Built-in board profile loaded with static mapping defaults.');?></p>
-        </section>
-        <section class="ipmi-summary-card">
-            <h4>Mapping Health</h4>
-            <p>Header detection is required before safe daemon control on ASRock-family boards.</p>
-            <strong><?=$board_profile_mapped;?><?=($board_profile_expected > 0 ? ' / '.$board_profile_expected : '');?></strong>
-            <p><span class="ipmi-status-badge <?=$mapping_status_class;?>"><?=($board_file_status ? ($mapping_complete ? 'Mapping Ready' : 'Needs Review') : 'Missing board.json');?></span></p>
-        </section>
-        <section class="ipmi-summary-card">
-            <h4>Config Schema</h4>
-            <p>Schema versions make upgrades and future migrations more predictable.</p>
-            <strong>v<?=$fan_schema_version;?></strong>
-            <p>Main config v<?=$cfg_schema_version;?><?=($board_file_status ? ', board.json v'.$board_schema_version : ', board.json missing');?></p>
-        </section>
-    </div>
 
     <div class="ipmi-section-grid ipmi-section-grid--wide">
         <section class="ipmi-section-card">
@@ -94,8 +67,11 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
                         <div class="ipmi-field__value" id="fan-board"><?=$board." ".$board_model." ".$sm_gen?></div>
                     </div>
                     <div class="ipmi-field">
-                        <label class="ipmi-field__label" for="FANCONTROL">Enable Fan Control</label>
-                        <select id="FANCONTROL" name="FANCONTROL" size="1" title="Enable fan control based on selected temperature sensors">
+                        <div class="ipmi-field--toggle-row">
+                            <label class="ipmi-field__label" for="ipmi-sw-fancontrol">Enable Fan Control</label>
+                            <span class="status"><input type="checkbox" id="ipmi-sw-fancontrol" aria-label="Enable fan control daemon"></span>
+                        </div>
+                        <select id="FANCONTROL" class="ipmi-sr-only" name="FANCONTROL" size="1" title="Enable fan control based on selected temperature sensors" tabindex="-1">
                             <?=mk_option($fanctrl, 'disable', 'No')?>
                             <?=mk_option($fanctrl, 'enable', 'Yes')?>
                         </select>
@@ -208,7 +184,7 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
             </div>
             <div class="ipmi-switch-meta">
                 <span class="ipmi-switch-label">Advanced tuning</span>
-                <span id="adv-switch" class="status"><input type="checkbox" id="advancedview" aria-describedby="fan-advanced-mode-hint"></span>
+                <span id="fan-adv-switch" class="status"><input type="checkbox" id="fan-advancedview" aria-describedby="fan-advanced-mode-hint"></span>
             </div>
         </div>
 
@@ -228,6 +204,7 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
 
         <form id="fanctrl_options" name="fanctrl_options" method="POST" action="/update.php" target="progressFrame">
             <input type="hidden" name="#file" value="ipmi/fan.cfg" />
+            <input type="hidden" name="SCHEMA_VERSION" value="<?=(int)IPMI_FAN_CONFIG_SCHEMA_VERSION;?>" />
 
             <div id="fan-configurator-context" class="ipmi-fan-config-context" role="status" aria-live="polite">
                 <span class="ipmi-fan-context-pill" id="fan-ctx-headers"></span>
@@ -315,7 +292,7 @@ if(is_file($log)){
 </div>
 <?php else: ?>
 <div class="ipmi-shell">
-    <section class="ipmi-page-hero">
+    <section class="ipmi-page-hero ipmi-page-hero--no-strip">
         <div class="ipmi-page-hero__main">
             <div class="ipmi-page-hero__eyebrow">Cooling Control</div>
             <h1>Fan Control</h1>
@@ -328,7 +305,6 @@ if(is_file($log)){
             </div>
         </aside>
     </section>
-    <?php ipmi_render_quick_nav_strip('fans', ['show_fan' => true]); ?>
     <div class="ipmi-alert ipmi-alert--danger">
         <p><strong>Unsupported board.</strong> Add or select a supported profile in Settings before enabling fan control.</p>
     </div>
@@ -345,22 +321,23 @@ $(function(){
 
     initDriveDropdown(false);
 
-    $('#tab2').click(function() {
-        checkBoard();
-        initDriveDropdown(true);
-    });
+    if (typeof ipmiOnMainTabClick === 'function')
+        ipmiOnMainTabClick(/fan control/i, function() {
+            checkBoard();
+            initDriveDropdown(true);
+        });
 
     if ($.cookie('one') == 'tab2')
         checkBoard();
 
-    $('#advancedview').switchButton({
+    $('#fan-advancedview').switchButton({
         labels_placement: 'left',
         on_label: 'Advanced',
         off_label: 'Basic',
         checked: ($.cookie('fanctrl_view_mode') == 'advanced')
     })
     .change(function () {
-        $.cookie('fanctrl_view_mode', $('#advancedview')[0].checked ? 'advanced' : 'basic', { expires: 3650 });
+        $.cookie('fanctrl_view_mode', $('#fan-advancedview')[0].checked ? 'advanced' : 'basic', { expires: 3650 });
         toggleFanCTRL();
         updateFanAdvancedHint();
     });
@@ -369,12 +346,15 @@ $(function(){
         syncControlledFields($(this).attr('name'));
         if ($(this).attr('name').indexOf('TEMP_') === 0)
             updateOverrideAvailability($(this).data('fanName'));
+        updateFanSensorReadings($(this).data('fanName'));
         toggleFanCTRL();
     });
 
     syncAllFanControls();
     toggleFanCTRL();
     updateFanAdvancedHint();
+    if (typeof window.IpmiFanCurve !== 'undefined' && window.IpmiFanCurve.initAll)
+        window.IpmiFanCurve.initAll();
 
     $('#btnConfig').click(function() {
         openBox('/plugins/ipmi/scripts/ipmi2json', 'IPMI Fan Config', 600, 900, true);
@@ -388,6 +368,9 @@ $(function(){
     $('#fanctrl_options').on('submit', validateFanConfig);
     checkFANCTRL();
 
+    if (typeof ipmiWireEnableSelectToggle === 'function')
+        ipmiWireEnableSelectToggle('#ipmi-sw-fancontrol', '#FANCONTROL');
+
     $('#fanlog-clear').on('click', clearFanLOG);
 
     <?php endif; ?>
@@ -397,6 +380,7 @@ $(function(){
 
 function resetFANDATA() {
     $('#FANCONTROL')[0].selectedIndex = 0;
+    $('#FANCONTROL').trigger('change');
     $('#FANPOLL').val('6');
     $('#HDDPOLL').val('18');
     if ($('#FANIP').length)
@@ -468,23 +452,27 @@ function validateFanConfig(event) {
         var overrideSensor = $('select[name="TEMPHDD_' + fanName + '"]').val();
 
         if (tempSensor && tempSensor !== '0') {
-            var low = parseInt($('select[name="TEMPLO_' + fanName + '"]').val(), 10);
-            var high = parseInt($('select[name="TEMPHI_' + fanName + '"]').val(), 10);
-            var min = parseInt($('select[name="FANMIN_' + fanName + '"]').val(), 10);
-            var max = parseInt($('select[name="FANMAX_' + fanName + '"]').val(), 10);
-
-            if (low >= high) errors.push(fanName + ': low threshold must be below high threshold.');
-            if (min > max) errors.push(fanName + ': minimum fan speed must not exceed maximum fan speed.');
+            var range = parseInt(window.IPMI_FAN_PWM_RANGE, 10) || 64;
+            var wire = ($('input[name="CURVE_' + fanName + '"]').val() || '').trim();
+            if (typeof window.IpmiFanCurve !== 'undefined' && window.IpmiFanCurve.validateWire) {
+                errors = errors.concat(window.IpmiFanCurve.validateWire(wire, range, fanName + ' primary curve'));
+            }
+            var min = parseInt($('input[name="FANMIN_' + fanName + '"]').val(), 10);
+            var max = parseInt($('input[name="FANMAX_' + fanName + '"]').val(), 10);
+            if (!isNaN(min) && !isNaN(max) && min > max)
+                errors.push(fanName + ': minimum fan speed must not exceed maximum fan speed.');
         }
 
         if (overrideSensor && overrideSensor !== '0') {
-            var lowOverride = parseInt($('select[name="TEMPLOO_' + fanName + '"]').val(), 10);
-            var highOverride = parseInt($('select[name="TEMPHIO_' + fanName + '"]').val(), 10);
-            var minOverride = parseInt($('select[name="FANMINO_' + fanName + '"]').val(), 10);
-            var maxOverride = parseInt($('select[name="FANMAXO_' + fanName + '"]').val(), 10);
-
-            if (lowOverride >= highOverride) errors.push(fanName + ': HDD override low threshold must be below the high threshold.');
-            if (minOverride > maxOverride) errors.push(fanName + ': HDD override minimum fan speed must not exceed the maximum.');
+            var rangeO = parseInt(window.IPMI_FAN_PWM_RANGE, 10) || 64;
+            var wireO = ($('input[name="CURVEO_' + fanName + '"]').val() || '').trim();
+            if (typeof window.IpmiFanCurve !== 'undefined' && window.IpmiFanCurve.validateWire) {
+                errors = errors.concat(window.IpmiFanCurve.validateWire(wireO, rangeO, fanName + ' HDD override curve'));
+            }
+            var minOverride = parseInt($('input[name="FANMINO_' + fanName + '"]').val(), 10);
+            var maxOverride = parseInt($('input[name="FANMAXO_' + fanName + '"]').val(), 10);
+            if (!isNaN(minOverride) && !isNaN(maxOverride) && minOverride > maxOverride)
+                errors.push(fanName + ': HDD override minimum fan speed must not exceed the maximum.');
         }
     });
 
@@ -545,6 +533,7 @@ function syncControlledFields(controlName) {
 
     var enabled = control.val() !== '0';
     $('.' + controlName).prop('disabled', !enabled);
+    $('[data-curve-controller="' + controlName + '"]').toggleClass('ipmi-fan-curve-editor--disabled', !enabled);
 }
 
 function updateOverrideAvailability(fanName) {
@@ -561,6 +550,30 @@ function updateOverrideAvailability(fanName) {
     syncControlledFields('TEMPHDD_' + fanName);
 }
 
+function updateFanSensorReading(selectName, helperId, emptyText) {
+    var select = $('select[name="' + selectName + '"]');
+    var helper = $('#' + helperId);
+    if (!select.length || !helper.length)
+        return;
+
+    var option = select.find('option:selected');
+    var current = option.attr('data-current-reading');
+    helper.text(current || emptyText);
+}
+
+function updateFanSensorReadings(fanName) {
+    updateFanSensorReading(
+        'TEMP_' + fanName,
+        'fan-reading-primary-' + fanName,
+        'Current reading follows the BMC firmware curve.'
+    );
+    updateFanSensorReading(
+        'TEMPHDD_' + fanName,
+        'fan-reading-override-' + fanName,
+        'Select an override sensor to show its current reading.'
+    );
+}
+
 function syncAllFanControls() {
     $('.fanctrl-temp').each(function() {
         syncControlledFields($(this).attr('name'));
@@ -568,6 +581,7 @@ function syncAllFanControls() {
 
     $('.ipmi-fan-card').each(function() {
         updateOverrideAvailability($(this).data('fanName'));
+        updateFanSensorReadings($(this).data('fanName'));
     });
 }
 

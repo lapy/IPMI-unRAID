@@ -1,8 +1,10 @@
 <?php
 
-require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_runtime.php';
-require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_fan_profiles.php';
-require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_config_store.php';
+$ipmi_include = __DIR__ . '/../../source/ipmi/usr/local/emhttp/plugins/ipmi/include/';
+require_once $ipmi_include . 'ipmi_runtime.php';
+require_once $ipmi_include . 'ipmi_fan_profiles.php';
+require_once $ipmi_include . 'ipmi_config_store.php';
+require_once $ipmi_include . 'ipmi_fan_curve.php';
 require_once __DIR__.'/../../source/release_info.php';
 
 function assert_true($condition, $message) {
@@ -11,6 +13,27 @@ function assert_true($condition, $message) {
         exit(1);
     }
 }
+
+$w = ipmi_fan_curve_wire_encode([['t' => 30, 'p' => 16], ['t' => 45, 'p' => 48]]);
+assert_true($w === '30:16|45:48', 'Fan curve wire encoding should use t:p segments.');
+$pts = ipmi_fan_curve_wire_decode('30:16|45:48');
+assert_true(count($pts) === 2 && $pts[0]['t'] === 30 && $pts[1]['p'] === 48, 'Fan curve wire decoding should restore points.');
+$iniCurve = tempnam(sys_get_temp_dir(), 'ipmi-curve.');
+assert_true($iniCurve !== false, 'Temporary INI fixture should be created.');
+file_put_contents($iniCurve, "CURVE_F1=30:16|45:48\n");
+$iniData = ipmi_read_ini_config($iniCurve);
+assert_true(ipmi_array_get($iniData, 'CURVE_F1', '') === '30:16|45:48', 'INI reader should preserve curve wire strings verbatim.');
+@unlink($iniCurve);
+$fctest = ['TEMPLO_F1' => '30', 'TEMPHI_F1' => '45', 'FANMIN_F1' => '16', 'FANMAX_F1' => '48'];
+$pp = ipmi_fan_curve_primary_points($fctest, 'F1', 64);
+assert_true(count($pp) === 2, 'Legacy flat keys should synthesize a two-point primary curve.');
+$res = ipmi_fan_curve_compute_pwm(37.5, $pp, 64, 16, 48);
+assert_true($res['pwm'] >= 16 && $res['pwm'] <= 48, 'Interpolated PWM should stay within configured endpoints.');
+$smooth = ipmi_fan_curve_compute_pwm(85, [['t' => 0, 'p' => 16], ['t' => 100, 'p' => 50]], 64, 16, 64);
+assert_true($smooth['pwm'] === 45, 'Interpolated PWM should preserve single-step values instead of snapping to coarse buckets.');
+$clamped = ipmi_fan_curve_clamp_points([['t' => -5, 'p' => 0], ['t' => 120, 'p' => 80]], 64);
+assert_true($clamped[0]['t'] === 0 && $clamped[0]['p'] === 1, 'Curve clamp should keep the first point inside the fixed graph bounds.');
+assert_true($clamped[1]['t'] === 100 && $clamped[1]['p'] === 64, 'Curve clamp should keep the final point inside the fixed graph bounds.');
 
 $profile = ipmi_detect_asrock_fan_profile('ASRockRack', 'ROMED8U-2T');
 assert_true($profile === 'asrockrack_romed8u_2t', 'ROMED8U-2T should resolve to the ROMED profile.');

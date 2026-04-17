@@ -1,34 +1,30 @@
-Menu="IPMITools:2"
+Menu="IPMI:5"
 Title="Event Log"
 Tag="file"
 Markdown="false"
 ---
-<?php
-require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_options.php';
-require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_runtime.php';
-require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_quick_nav.php';
-$ipmi_fan_menu_visible = ipmi_fan_control_menu_tab_visible();
-$ipmi_daemon_snapshot = ipmi_daemon_running_flags();
-?>
 <link type="text/css" rel="stylesheet" href="<?=autov('/webGui/styles/jquery.switchbutton.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/ipmi.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/tablesorter.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/tablesorter-'.(($display['theme'] == 'white' || $display['theme'] == 'azure') ? 'white' : 'black').'.css');?>">
 
 <div class="ipmi-shell ipmi-tool-shell">
-    <div class="ipmi-tool-header">
-        <div>
+    <section class="ipmi-page-hero ipmi-page-hero--no-strip">
+        <div class="ipmi-page-hero__main">
+            <div class="ipmi-page-hero__eyebrow">IPMI</div>
             <h1>Event Log</h1>
             <p>Search, filter, and triage current SEL-derived events. Archive mode keeps deleted entries on flash storage for later review.</p>
-            <p class="ipmi-tool-meta">Event notifications: <?= $ipmi_daemon_snapshot['seld'] ? 'running' : 'stopped'; ?>. Network BMCs: <?= ($netsvc === 'enable') ? 'enabled' : 'disabled'; ?>.</p>
         </div>
-        <div class="ipmi-switch-meta">
-            <span class="ipmi-switch-label">Archive deleted events</span>
-            <span id="arch-switch" class="status"><input type="checkbox" id="event-arch"></span>
-        </div>
-    </div>
-
-    <?php ipmi_render_quick_nav_strip('events', ['show_fan' => $ipmi_fan_menu_visible]); ?>
+        <aside class="ipmi-page-hero__aside" aria-label="Archive option">
+            <div class="ipmi-hero-stat">
+                <div class="ipmi-hero-stat__label">Archive</div>
+                <div class="ipmi-switch-meta">
+                    <span class="ipmi-switch-label">Deleted events</span>
+                    <span id="arch-switch" class="status"><input type="checkbox" id="event-arch" aria-label="Archive deleted events to flash"></span>
+                </div>
+            </div>
+        </aside>
+    </section>
 
     <div class="ipmi-table-shell">
         <table class="tablesorter shift hover-highlight events" id="tblEvent">
@@ -80,13 +76,8 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
 $(function(){
     //event archive switch set cookie and toggle archive setting
     function ipmiSetHostArchiveTabVisible(show) {
-        var $t = $('#tab3');
-        if (!$t.length)
-            return;
-        if ($('.tabs-container').length)
-            $t.toggle(show);
-        else
-            $t.parent().toggle(show);
+        if (typeof ipmiToggleMainTabControls === 'function')
+            ipmiToggleMainTabControls(/archived events/i, show);
     }
 
     $('#event-arch').switchButton({

@@ -1,32 +1,31 @@
-Menu="IPMITools:1"
+Menu="IPMI:4"
 Title="Sensors"
 Icon="heartbeat"
 Tag="heartbeat"
 Markdown="true"
 ---
-<?php
-require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_runtime.php';
-require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_quick_nav.php';
-$ipmi_fan_menu_visible = ipmi_fan_control_menu_tab_visible();
-?>
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/ipmi.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/tablesorter.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/tablesorter-'.(($display['theme'] == 'white' || $display['theme'] == 'azure') ? 'white' : 'black').'.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/webGui/styles/jquery.switchbutton.css');?>">
 
 <div class="ipmi-shell ipmi-tool-shell">
-    <div class="ipmi-tool-header">
-        <div>
-            <h1>Sensor Readings</h1>
-            <p>Live sensor inventory with saved filters, severity-aware reading colors, and an advanced threshold view when you need the raw IPMI details.</p>
+    <section class="ipmi-page-hero ipmi-page-hero--no-strip">
+        <div class="ipmi-page-hero__main">
+            <div class="ipmi-page-hero__eyebrow">IPMI</div>
+            <h1>Sensors</h1>
+            <p>Live sensor inventory with saved filters, severity-aware reading colors, and an optional detailed threshold view when you need the raw IPMI columns.</p>
         </div>
-        <div class="ipmi-switch-meta">
-            <span class="ipmi-switch-label">Advanced columns</span>
-            <span id="adv-switch" class="status"><input type='checkbox' id='advancedview'></span>
-        </div>
-    </div>
-
-    <?php ipmi_render_quick_nav_strip('sensors', ['show_fan' => $ipmi_fan_menu_visible]); ?>
+        <aside class="ipmi-page-hero__aside" aria-label="View options">
+            <div class="ipmi-hero-stat">
+                <div class="ipmi-hero-stat__label">Column mode</div>
+                <div class="ipmi-switch-meta">
+                    <span class="ipmi-switch-label">Advanced columns</span>
+                    <span id="adv-switch" class="status"><input type="checkbox" id="advancedview" aria-label="Show advanced threshold columns"></span>
+                </div>
+            </div>
+        </aside>
+    </section>
 
     <div class="ipmi-alert ipmi-alert--info">
         <p>Basic view focuses on the current reading, while advanced view exposes lower and upper threshold values from the BMC.</p>

@@ -1,4 +1,4 @@
-Menu="IPMITools:3"
+Menu="IPMI:6"
 Title="Archived Events"
 Tag="save"
 Markdown="false"
@@ -6,8 +6,6 @@ Markdown="false"
 <?php
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_options.php';
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_runtime.php';
-require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_quick_nav.php';
-$ipmi_fan_menu_visible = ipmi_fan_control_menu_tab_visible();
 $ipmi_daemon_snapshot = ipmi_daemon_running_flags();
 ?>
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/ipmi.css');?>">
@@ -22,8 +20,6 @@ $ipmi_daemon_snapshot = ipmi_daemon_running_flags();
             <p class="ipmi-tool-meta">Event notifications: <?= $ipmi_daemon_snapshot['seld'] ? 'running' : 'stopped'; ?>. Network BMCs: <?= ($netsvc === 'enable') ? 'enabled' : 'disabled'; ?>.</p>
         </div>
     </div>
-
-    <?php ipmi_render_quick_nav_strip('archive', ['show_fan' => $ipmi_fan_menu_visible]); ?>
 
     <div class="ipmi-table-shell">
         <table class="tablesorter shift hover-highlight archive" id="tblArchive">

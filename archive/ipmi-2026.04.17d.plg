@@ -19,6 +19,7 @@
 ##&name;
 ###2026.04.17d
 - Refactor IPMI plugin for enhanced performance and usability. Introduce new navigation structure for improved user experience across settings, sensors, and events. Update JavaScript functions for better data handling and responsiveness. Enhance CSS for modern design consistency, including new reading status styles. Streamline configuration loading functions for efficiency.
+- Packaged build generated from staging.
 ###2026.04.17c
 - Enhance IPMI plugin UI with new quick navigation features across multiple pages, including event log, archived events, and sensor pages. Introduce improved layout and styling for better user experience, along with additional functionality for fan control and diagnostics. Update CSS for modern design consistency and responsiveness.
 ###2026.04.17b

@@ -8,7 +8,7 @@ if (!defined('IPMI_MAIN_CONFIG_SCHEMA_VERSION')) {
 }
 
 if (!defined('IPMI_FAN_CONFIG_SCHEMA_VERSION')) {
-    define('IPMI_FAN_CONFIG_SCHEMA_VERSION', 2);
+    define('IPMI_FAN_CONFIG_SCHEMA_VERSION', 3);
 }
 
 if (!defined('IPMI_BOARD_CONFIG_SCHEMA_VERSION')) {

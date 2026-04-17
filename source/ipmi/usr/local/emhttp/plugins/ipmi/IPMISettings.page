@@ -6,8 +6,6 @@ Markdown="false"
 ---
 <?php require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_settings.php';?>
 <?php
-require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_quick_nav.php';
-$version_check = version_compare(parse_ini_file('/etc/unraid-version')['version'], '7.1.99', '>');
 $footer_enabled_count = count(array_filter($disp_sensors));
 $network_enabled = ($netsvc === 'enable');
 $override_enabled = ($override === 'enable');
@@ -24,9 +22,16 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
 <div class="ipmi-shell">
     <section class="ipmi-page-hero">
         <div class="ipmi-page-hero__main">
-            <div class="ipmi-page-hero__eyebrow">Platform Management</div>
-            <h1>IPMI Settings</h1>
+            <div class="ipmi-page-hero__eyebrow">IPMI</div>
+            <h1>Settings</h1>
             <p>Configure how the plugin connects to your BMC, how events are collected, and how readings are surfaced through the dashboard, tools, and footer.</p>
+            <div class="ipmi-page-hero__actions">
+                <button type="button"
+                        class="ipmi-diagnostics-export"
+                        id="ipmi-diag-export"
+                        title="Download redacted ipmi.cfg, fan.cfg, and board.json">Export diagnostics</button>
+                <span class="ipmi-page-hero__actions-hint">Redacted bundle for support.</span>
+            </div>
         </div>
         <aside class="ipmi-page-hero__aside">
             <div class="ipmi-hero-stat">
@@ -42,36 +47,29 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
                 <div class="ipmi-hero-stat__value"><?=$fanctrl_status;?></div>
             </div>
         </aside>
+        <div class="ipmi-page-hero__strip" aria-label="Quick status">
+            <div class="ipmi-hero-metric">
+                <div class="ipmi-hero-metric__label">Connection</div>
+                <div class="ipmi-hero-metric__value"><?=($network_enabled ? 'Network enabled' : 'Local only');?></div>
+                <div class="ipmi-hero-metric__hint"><?=($local === 'enable' ? 'Localhost in pool' : 'Localhost not in pool');?></div>
+            </div>
+            <div class="ipmi-hero-metric">
+                <div class="ipmi-hero-metric__label">Board override</div>
+                <div class="ipmi-hero-metric__value"><?=($override_enabled ? 'Enabled' : 'Disabled');?></div>
+                <div class="ipmi-hero-metric__hint"><?=($override_enabled ? 'Manual profile' : 'Live DMI');?></div>
+            </div>
+            <div class="ipmi-hero-metric">
+                <div class="ipmi-hero-metric__label">Display</div>
+                <div class="ipmi-hero-metric__value"><?=($dash === 'enable' ? 'Dashboard on' : 'Dashboard off');?></div>
+                <div class="ipmi-hero-metric__hint"><?=$footer_enabled_count;?> / <?=$footer_sensor_slots;?> footer slots</div>
+            </div>
+            <div class="ipmi-hero-metric">
+                <div class="ipmi-hero-metric__label">Config</div>
+                <div class="ipmi-hero-metric__value">ipmi.cfg v<?=$cfg_schema_version;?></div>
+                <div class="ipmi-hero-metric__hint">fan.cfg v<?=$fan_schema_version;?><?=($board_status ? ' · '.htmlspecialchars($board_profile_label) : '');?></div>
+            </div>
+        </div>
     </section>
-
-    <div class="ipmi-summary-grid">
-        <section class="ipmi-summary-card">
-            <h4>Connection Mode</h4>
-            <p>Network polling can be turned on for remote BMCs, while localhost mode keeps local hardware visible alongside remote systems.</p>
-            <strong><?=($network_enabled ? 'Network Enabled' : 'Local Only');?></strong>
-            <p><?=($local === 'enable' ? 'Localhost is included in the monitored hosts.' : 'Localhost is not added as a separate monitored host.');?></p>
-        </section>
-        <section class="ipmi-summary-card">
-            <h4>Board Override</h4>
-            <p>Virtualized or lab environments can pin the plugin to a specific board family and model behavior.</p>
-            <strong><?=($override_enabled ? 'Enabled' : 'Disabled');?></strong>
-            <p><?=($override_enabled ? 'Manual board profile selection is active.' : 'Live DMI detection is active.');?></p>
-        </section>
-        <section class="ipmi-summary-card">
-            <h4>Display Surfaces</h4>
-            <p>Dashboard and footer visibility are now surfaced up front, which makes it easier to understand where readings will appear.</p>
-            <strong><?=($dash === 'enable' ? 'Dashboard On' : 'Dashboard Off');?></strong>
-            <p><?=$footer_enabled_count;?> / <?=$footer_sensor_slots;?> footer slot<?=($footer_sensor_slots == 1 ? '' : 's');?> assigned</p>
-        </section>
-        <section class="ipmi-summary-card">
-            <h4>Schema Versions</h4>
-            <p>Modernized config loading uses normalized schemas to keep upgrades safer.</p>
-            <strong>ipmi.cfg v<?=$cfg_schema_version;?></strong>
-            <p>fan.cfg v<?=$fan_schema_version;?><?=($board_status ? ', board profile '.htmlspecialchars($board_profile_label) : '');?></p>
-        </section>
-    </div>
-
-    <?php ipmi_render_quick_nav_strip('settings', ['show_fan' => $ipmi_fan_menu_visible]); ?>
 
     <?php if (!$ipmi_fan_menu_visible): ?>
     <div class="ipmi-alert ipmi-alert--info" style="margin-bottom:var(--ipmi-space-5);">
@@ -103,8 +101,11 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
                     <div class="ipmi-field__value" id="detected-board"><?=$board." ".$board_model." ".$sm_gen?></div>
                 </div>
                 <div class="ipmi-field">
-                    <label class="ipmi-field__label" for="NETWORK">Enable Network Connection(s)</label>
-                    <select id="NETWORK" class="ipmi-run" name="NETWORK" size="1" title="Enable connection to network based IPMI">
+                    <div class="ipmi-field--toggle-row">
+                        <label class="ipmi-field__label" for="ipmi-sw-network">Enable Network Connection(s)</label>
+                        <span class="status"><input type="checkbox" id="ipmi-sw-network" aria-label="Enable network IPMI connections"></span>
+                    </div>
+                    <select id="NETWORK" class="ipmi-run ipmi-sr-only" name="NETWORK" size="1" title="Enable connection to network based IPMI" tabindex="-1">
                         <?=mk_option($netsvc, 'disable', 'No');?>
                         <?=mk_option($netsvc, 'enable', 'Yes');?>
                     </select>
@@ -120,8 +121,11 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
                 </div>
 
                 <div class="ipmi-field ipmi-lan">
-                    <label class="ipmi-field__label" for="LOCAL">Enable Localhost Connection</label>
-                    <select id="LOCAL" class="ipmi-run ipmi-lan" name="LOCAL" size="1" title="Enable localhost connection along with network connections">
+                    <div class="ipmi-field--toggle-row">
+                        <label class="ipmi-field__label" for="ipmi-sw-local">Enable Localhost Connection</label>
+                        <span class="status"><input type="checkbox" id="ipmi-sw-local" aria-label="Include localhost in monitored hosts"></span>
+                    </div>
+                    <select id="LOCAL" class="ipmi-run ipmi-lan ipmi-sr-only" name="LOCAL" size="1" title="Enable localhost connection along with network connections" tabindex="-1">
                         <?=mk_option($local, 'disable', 'No');?>
                         <?=mk_option($local, 'enable', 'Yes');?>
                     </select>
@@ -161,8 +165,11 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
 
             <div class="ipmi-form-grid ipmi-form-grid--three">
                 <div class="ipmi-field ipmi-lan">
-                    <label class="ipmi-field__label" for="OVERRIDE">Enable Override</label>
-                    <select id="OVERRIDE" class="ipmi-run ipmi-lan" name="OVERRIDE" size="1" title="Enable motherboard override for virtual machines">
+                    <div class="ipmi-field--toggle-row">
+                        <label class="ipmi-field__label" for="ipmi-sw-override">Enable Override</label>
+                        <span class="status"><input type="checkbox" id="ipmi-sw-override" aria-label="Enable motherboard override for virtual machines"></span>
+                    </div>
+                    <select id="OVERRIDE" class="ipmi-run ipmi-lan ipmi-sr-only" name="OVERRIDE" size="1" title="Enable motherboard override for virtual machines" tabindex="-1">
                         <?=mk_option($override, 'disable', 'No');?>
                         <?=mk_option($override, 'enable', 'Yes');?>
                     </select>
@@ -228,8 +235,11 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
 
                 <div class="ipmi-form-grid ipmi-form-grid--three">
                     <div class="ipmi-field">
-                        <label class="ipmi-field__label" for="IPMISELD">Enable Event Notifications</label>
-                        <select id="IPMISELD" name="IPMISELD" size="1" title="Enable event notifications and local system logging for IPMI events">
+                        <div class="ipmi-field--toggle-row">
+                            <label class="ipmi-field__label" for="ipmi-sw-seld">Enable Event Notifications</label>
+                            <span class="status"><input type="checkbox" id="ipmi-sw-seld" aria-label="Enable IPMI event notifications"></span>
+                        </div>
+                        <select id="IPMISELD" class="ipmi-sr-only" name="IPMISELD" size="1" title="Enable event notifications and local system logging for IPMI events" tabindex="-1">
                             <?=mk_option($seld, "disable", "No");?>
                             <?=mk_option($seld, "enable", "Yes");?>
                         </select>
@@ -358,17 +368,6 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
 
 <script>
 $(function(){
-    <?php if (!$version_check) : ?>
-    $('.tabs').append('<div class="tab"><input type="radio" name="tabs2" id="tab5"><label for="tab5"><i class="icon fa fa-heartbeat"></i>Readings</label></div>');
-    <?php endif; ?>
-    <?php if ($version_check) : ?>
-    if ($('.tabs-container').length) {
-        $('.tabs-container').append('<button role="tab" name="tabs2" id="tab5" aria-controls="tab5-panel" tabindex="-1" aria-selected="false"><span><i class="fa fa-heartbeat title"></i>Readings</span></button>');
-    } else {
-        $('.tabs').append('<div class="tab"><input type="radio" name="tabs2" id="tab5"><label for="tab5"><i class="icon fa fa-heartbeat"></i>Readings</label></div>');
-    }
-    <?php endif; ?>
-
     <?php if (function_exists('plugin_update_available') && $version = plugin_update_available('ipmi')): ?>
         showNotice('IPMI <?=htmlspecialchars($version);?> available. <a>Update</a>', 'ipmi');
         $('#user-notice a').on('click', function () {
@@ -398,11 +397,6 @@ $(function(){
         }, { button: btn });
     });
 
-    $('#tab5').click(function() {
-        $.cookie('one', 'tab1', { expires:null, path: '/'});
-        location = '/Settings/IPMITools';
-    });
-
     $('#btnApply').click(verifyDATA);
     $('#ipmi-default').click(resetDATA);
     $('#seld-default').click(resetSeldDATA);
@@ -421,6 +415,13 @@ $(function(){
 
     $('#LOCAL').change(checkLOCAL);
     checkLOCAL();
+
+    if (typeof ipmiWireEnableSelectToggle === 'function') {
+        ipmiWireEnableSelectToggle('#ipmi-sw-network', '#NETWORK');
+        ipmiWireEnableSelectToggle('#ipmi-sw-local', '#LOCAL');
+        ipmiWireEnableSelectToggle('#ipmi-sw-override', '#OVERRIDE');
+        ipmiWireEnableSelectToggle('#ipmi-sw-seld', '#IPMISELD');
+    }
 
     $('.ipmi-anchor-nav').on('click', '[data-ipmi-scroll-target]', function() {
         var id = $(this).data('ipmi-scroll-target');
@@ -476,6 +477,8 @@ function DDCheckList(Select, Values) {
 function resetDATA() {
     $('#NETWORK')[0].selectedIndex = 0;
     $('#LOCAL')[0].selectedIndex = 0;
+    $('#NETWORK').trigger('change');
+    $('#LOCAL').trigger('change');
     $('#IPADDR').val('');
     $('#USER').val('');
     $('#PASSWORD').val('');

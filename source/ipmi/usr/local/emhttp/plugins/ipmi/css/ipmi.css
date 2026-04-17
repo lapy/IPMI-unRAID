@@ -86,16 +86,18 @@ body.azure.dark {
 }
 
 #adv-switch,
+#fan-adv-switch,
 #arch-switch {
     margin-top: -26px;
 }
 
-.ipmi-fan-page #adv-switch {
+.ipmi-fan-page #fan-adv-switch {
     margin-top: 0;
 }
 
-#load-switch {
-    margin-top: -32px;
+.ipmi-page-hero #adv-switch,
+.ipmi-page-hero #arch-switch {
+    margin-top: 0;
 }
 
 #dash-switch {
@@ -128,6 +130,29 @@ select.display {
     color: var(--ipmi-color-text);
     font-family: var(--ipmi-font-body);
     padding-bottom: var(--ipmi-space-8);
+    overflow: visible;
+}
+
+/* Settings → IPMI opens inside #displaybox; default modal CSS often clips descendant corners */
+#displaybox .ipmi-shell,
+#displaybox .ipmi-shell .ipmi-section-card,
+#displaybox .ipmi-shell .ipmi-section-grid,
+#displaybox .ipmi-shell .ipmi-page-hero,
+#displaybox .ipmi-shell .ipmi-anchor-nav,
+#displaybox .ipmi-shell .ipmi-actions,
+#displaybox .ipmi-shell .ipmi-actions__group {
+    overflow: visible !important;
+}
+
+/* Config editor: avoid tall empty tab panel (displaybox / flex min-height) vs shorter content */
+#displaybox .ipmi-editor-shell {
+    min-height: 0;
+}
+
+#displaybox .ipmi-editor-shell > form#autoload-form {
+    margin: 0;
+    padding: 0;
+    border: none;
 }
 
 .ipmi-shell a {
@@ -150,6 +175,7 @@ select.display {
 .ipmi-page-hero {
     display: grid;
     grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+    grid-template-rows: auto auto;
     gap: var(--ipmi-space-6);
     align-items: start;
     padding: var(--ipmi-space-7);
@@ -158,6 +184,82 @@ select.display {
     background: var(--ipmi-color-hero);
     color: #ffffff;
     box-shadow: var(--ipmi-shadow-md);
+    overflow: visible;
+}
+
+.ipmi-page-hero__main {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.ipmi-page-hero__strip {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--ipmi-space-3);
+    padding-top: var(--ipmi-space-5);
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Single-row hero (no metrics strip); two-class selector beats later single-class .ipmi-page-hero tweaks */
+.ipmi-page-hero.ipmi-page-hero--no-strip {
+    grid-template-rows: auto;
+}
+
+.ipmi-hero-metric {
+    padding: var(--ipmi-space-3) var(--ipmi-space-4);
+    border-radius: var(--ipmi-radius-sm);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(7, 19, 36, 0.22);
+    min-width: 0;
+}
+
+.ipmi-hero-metric__label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.ipmi-hero-metric__value {
+    margin-top: 6px;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.25;
+    word-break: break-word;
+}
+
+.ipmi-hero-metric__hint {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.78);
+}
+
+@media (max-width: 1100px) {
+    .ipmi-page-hero__strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 720px) {
+    .ipmi-page-hero {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+    }
+
+    .ipmi-page-hero__main,
+    .ipmi-page-hero__aside,
+    .ipmi-page-hero__strip {
+        grid-column: 1;
+        grid-row: auto;
+    }
+
+    .ipmi-page-hero__strip {
+        grid-template-columns: 1fr;
+    }
 }
 
 .ipmi-page-hero__eyebrow {
@@ -188,7 +290,63 @@ select.display {
     line-height: 1.65;
 }
 
+.ipmi-page-hero code {
+    padding: 2px 7px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(7, 19, 36, 0.35);
+    color: #f1f5f9;
+    font-size: 0.92em;
+}
+
+.ipmi-page-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ipmi-space-3);
+    margin-top: var(--ipmi-space-5);
+    overflow: visible;
+}
+
+.ipmi-page-hero__actions-hint {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.ipmi-shell button.ipmi-diagnostics-export {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px !important;
+    height: auto !important;
+    max-height: none !important;
+    padding: 10px 20px !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+    border-radius: var(--ipmi-radius-sm) !important;
+    background-image: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.35) !important;
+    background: rgba(7, 19, 36, 0.35) !important;
+    color: #ffffff !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transform: translateZ(0);
+    -webkit-font-smoothing: antialiased;
+}
+
+.ipmi-shell button.ipmi-diagnostics-export:hover {
+    border-color: rgba(255, 255, 255, 0.55) !important;
+    background: rgba(7, 19, 36, 0.5) !important;
+    transform: translateZ(0) translateY(-1px);
+}
+
 .ipmi-page-hero__aside {
+    grid-column: 2;
+    grid-row: 1;
     display: grid;
     gap: var(--ipmi-space-3);
     align-self: stretch;
@@ -217,6 +375,14 @@ select.display {
     font-weight: 700;
 }
 
+.ipmi-hero-stat__hint {
+    margin-top: 2px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.74);
+}
+
 /* Daemon Running/Stopped in hero aside — avoid Unraid .green/.orange (low contrast on gradient + glass). */
 .ipmi-shell .ipmi-text-status {
     font-weight: 800;
@@ -240,6 +406,10 @@ select.display {
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
+.ipmi-page-hero .ipmi-switch-label {
+    color: rgba(255, 255, 255, 0.82);
+}
+
 .ipmi-summary-grid,
 .ipmi-section-grid {
     display: grid;
@@ -254,6 +424,7 @@ select.display {
 .ipmi-section-grid {
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     margin-bottom: var(--ipmi-space-6);
+    overflow: visible;
 }
 
 .ipmi-section-grid--wide {
@@ -306,6 +477,8 @@ select.display {
 .ipmi-section-card {
     padding: var(--ipmi-space-6);
     margin-bottom: var(--ipmi-space-6);
+    /* Let control corners (focus ring, radius) paint past card edges; theme/displaybox often clips. */
+    overflow: visible;
 }
 
 .ipmi-empty-state {
@@ -418,6 +591,34 @@ select.display {
     grid-column: 1 / -1;
 }
 
+.ipmi-field--toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--ipmi-space-4);
+}
+
+.ipmi-field--toggle-row .ipmi-field__label {
+    margin: 0;
+}
+
+.ipmi-field:has(select.ipmi-sr-only) {
+    position: relative;
+}
+
+.ipmi-shell select.ipmi-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+    min-height: 0;
+}
+
 .ipmi-field__label {
     color: var(--ipmi-color-text);
     font-size: 13px;
@@ -474,6 +675,7 @@ select.display {
     align-items: center;
     gap: var(--ipmi-space-3);
     margin-top: var(--ipmi-space-5);
+    overflow: visible;
 }
 
 .ipmi-actions--split {
@@ -485,6 +687,7 @@ select.display {
     flex-wrap: wrap;
     align-items: center;
     gap: var(--ipmi-space-3);
+    overflow: visible;
 }
 
 .ipmi-actions--dangerous {
@@ -494,136 +697,16 @@ select.display {
 }
 
 .ipmi-actions--dangerous input[type="button"] {
-    border: 1px solid var(--ipmi-color-danger-soft);
-    background: var(--ipmi-color-danger-soft);
-    color: var(--ipmi-color-danger);
+    background-image: none !important;
+    border: 1px solid var(--ipmi-color-danger-soft) !important;
+    background: var(--ipmi-color-danger-soft) !important;
+    color: var(--ipmi-color-danger) !important;
 }
 
-/* Unified application nav (workspaces + context) */
-.ipmi-app-nav {
-    margin: 0 0 var(--ipmi-space-5);
-    padding: var(--ipmi-space-4) var(--ipmi-space-5);
-    border-radius: var(--ipmi-radius-md);
-    border: 1px solid var(--ipmi-color-border);
-    background: var(--ipmi-color-surface);
-    box-shadow: var(--ipmi-shadow-sm);
-}
-
-.ipmi-app-nav__top {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--ipmi-space-3);
-    margin-bottom: var(--ipmi-space-3);
-    padding-bottom: var(--ipmi-space-3);
-    border-bottom: 1px solid var(--ipmi-color-border);
-}
-
-.ipmi-app-nav__workspaces {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--ipmi-space-2);
-}
-
-.ipmi-app-nav__workspace {
-    display: inline-flex;
-    align-items: center;
-    padding: 8px 16px;
-    border-radius: 999px;
-    border: 1px solid var(--ipmi-color-border);
-    background: var(--ipmi-color-surface-soft);
-    color: var(--ipmi-color-primary);
-    font-size: 13px;
-    font-weight: 700;
-    text-decoration: none;
-    letter-spacing: 0.02em;
-}
-
-.ipmi-app-nav__workspace.is-active {
-    background: var(--ipmi-color-primary-soft);
-    color: var(--ipmi-color-text);
-    border-color: rgba(25, 118, 210, 0.35);
-}
-
-.ipmi-app-nav__export {
-    display: inline-flex;
-    align-items: center;
-    padding: 8px 14px;
-    border-radius: 999px;
-    border: 1px solid var(--ipmi-color-border);
-    background: var(--ipmi-color-surface-soft);
-    color: var(--ipmi-color-text);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: inherit;
-}
-
-.ipmi-app-nav__export:hover {
-    border-color: var(--ipmi-color-primary);
-    color: var(--ipmi-color-primary);
-}
-
-.ipmi-app-nav__context {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--ipmi-space-2) var(--ipmi-space-4);
-}
-
-.ipmi-app-nav__link {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--ipmi-color-primary);
-    text-decoration: none;
-}
-
-.ipmi-app-nav__link.is-active {
-    color: var(--ipmi-color-text);
-    text-decoration: underline;
-}
-
-.ipmi-app-nav__hint {
-    font-size: 13px;
-    color: var(--ipmi-color-text-soft);
-}
-
-.ipmi-hub-strip {
-    margin: 0 0 var(--ipmi-space-5);
-    padding: var(--ipmi-space-4) var(--ipmi-space-5);
-    border-radius: var(--ipmi-radius-md);
-    border: 1px solid var(--ipmi-color-border);
-    background: var(--ipmi-color-surface);
-    box-shadow: var(--ipmi-shadow-sm);
-}
-
-.ipmi-hub-strip__nav {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--ipmi-space-2) var(--ipmi-space-3);
-}
-
-.ipmi-hub-strip__link,
-.ipmi-hub-strip__btn {
-    display: inline-flex;
-    align-items: center;
-    padding: 8px 14px;
-    border-radius: 999px;
-    border: 1px solid var(--ipmi-color-border);
-    background: var(--ipmi-color-surface-soft);
-    color: var(--ipmi-color-primary);
-    font-size: 13px;
-    font-weight: 600;
-    text-decoration: none;
-    cursor: pointer;
-    font-family: inherit;
-}
-
-.ipmi-hub-strip__btn {
-    color: var(--ipmi-color-text);
+.ipmi-actions--dangerous input[type="button"]:hover {
+    border-color: rgba(192, 57, 43, 0.28) !important;
+    background: rgba(192, 57, 43, 0.18) !important;
+    color: var(--ipmi-color-danger) !important;
 }
 
 .ipmi-anchor-nav {
@@ -639,6 +722,7 @@ select.display {
     border: 1px solid var(--ipmi-color-border);
     background: var(--ipmi-color-surface-soft);
     backdrop-filter: blur(10px);
+    overflow: visible;
 }
 
 .ipmi-anchor-nav a,
@@ -651,17 +735,20 @@ select.display {
 
 .ipmi-anchor-nav__link {
     margin: 0;
-    padding: 0;
     border: none;
     background: none;
     font-family: inherit;
     cursor: pointer;
 }
 
-.ipmi-anchor-nav__link:hover,
-.ipmi-anchor-nav__link:focus-visible {
+.ipmi-anchor-nav__link:hover {
     text-decoration: underline;
-    outline: none;
+}
+
+.ipmi-shell .ipmi-anchor-nav__link:focus-visible {
+    text-decoration: underline;
+    outline: 2px solid var(--ipmi-color-primary);
+    outline-offset: 2px;
 }
 
 .ipmi-quick-nav {
@@ -703,13 +790,16 @@ select.display {
     color: var(--ipmi-color-text-soft);
 }
 
-.ipmi-inline-button {
+.ipmi-shell .ipmi-inline-button {
     margin-top: var(--ipmi-space-2);
     padding: 8px 14px;
-    border-radius: 999px;
-    border: 1px solid var(--ipmi-color-border);
-    background: var(--ipmi-color-surface);
-    color: var(--ipmi-color-primary);
+    border-radius: var(--ipmi-radius-sm);
+    background-image: none !important;
+    border: 1px solid var(--ipmi-color-border) !important;
+    background: var(--ipmi-color-surface) !important;
+    color: var(--ipmi-color-primary) !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
@@ -780,19 +870,108 @@ body.azure.dark .ipmi-actions--sticky {
     background: rgba(23, 32, 45, 0.94);
 }
 
+/*
+ * Unraid / Dynamix often sets fixed control height and overflow with equal or higher specificity.
+ * !important keeps radius, height, and overflow from being clipped by the base theme.
+ */
 .ipmi-shell input[type="button"],
 .ipmi-shell input[type="submit"],
 .ipmi-shell button,
 .ipmi-shell .pager a {
-    border-radius: 999px;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    background-image: none !important;
+    background-color: var(--ipmi-color-surface) !important;
+    border: 1px solid var(--ipmi-color-border-strong) !important;
+    color: var(--ipmi-color-text) !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    border-radius: var(--ipmi-radius-sm) !important;
+    min-height: 40px !important;
+    height: auto !important;
+    max-height: none !important;
+    line-height: 1.25 !important;
+    padding: 8px 16px !important;
+    overflow: visible !important;
+    clip-path: none !important;
+    box-sizing: border-box !important;
+    transform: translateZ(0);
+    -webkit-font-smoothing: antialiased;
     transition: transform var(--ipmi-transition), box-shadow var(--ipmi-transition), opacity var(--ipmi-transition);
+}
+
+.ipmi-shell .pager a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px !important;
+    padding: 6px 12px !important;
+}
+
+/* Anchor chips: tighter than form buttons */
+.ipmi-shell .ipmi-anchor-nav .ipmi-anchor-nav__link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px !important;
+    height: auto !important;
+    max-height: none !important;
+    padding: 6px 12px !important;
+    border-radius: var(--ipmi-radius-sm) !important;
+    overflow: visible !important;
+    clip-path: none !important;
+    background-image: none !important;
+    background-color: var(--ipmi-color-surface) !important;
+    border: 1px solid rgba(25, 118, 210, 0.26) !important;
+    color: var(--ipmi-color-primary) !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    transform: translateZ(0);
+    -webkit-appearance: none !important;
+    appearance: none !important;
+}
+
+.ipmi-shell input[type="submit"] {
+    background: var(--ipmi-color-primary-soft) !important;
+    border-color: rgba(25, 118, 210, 0.38) !important;
+    color: var(--ipmi-color-primary) !important;
+}
+
+.ipmi-shell input[type="button"]:focus-visible,
+.ipmi-shell input[type="submit"]:focus-visible,
+.ipmi-shell button:not(.ipmi-anchor-nav__link):focus-visible,
+.ipmi-shell .pager a:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.28);
+}
+
+body.dark .ipmi-shell input[type="button"]:focus-visible,
+body.dark .ipmi-shell input[type="submit"]:focus-visible,
+body.dark .ipmi-shell button:not(.ipmi-anchor-nav__link):focus-visible,
+body.dark .ipmi-shell .pager a:focus-visible,
+body.black .ipmi-shell input[type="button"]:focus-visible,
+body.black .ipmi-shell input[type="submit"]:focus-visible,
+body.black .ipmi-shell button:not(.ipmi-anchor-nav__link):focus-visible,
+body.black .ipmi-shell .pager a:focus-visible,
+body.azure.dark .ipmi-shell input[type="button"]:focus-visible,
+body.azure.dark .ipmi-shell input[type="submit"]:focus-visible,
+body.azure.dark .ipmi-shell button:not(.ipmi-anchor-nav__link):focus-visible,
+body.azure.dark .ipmi-shell .pager a:focus-visible {
+    box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.38);
 }
 
 .ipmi-shell input[type="button"]:hover,
 .ipmi-shell input[type="submit"]:hover,
 .ipmi-shell button:hover,
 .ipmi-shell .pager a:hover {
-    transform: translateY(-1px);
+    background-color: var(--ipmi-color-surface-soft) !important;
+    border-color: rgba(25, 118, 210, 0.32) !important;
+    transform: translateZ(0) translateY(-1px);
+}
+
+.ipmi-shell input[type="submit"]:hover {
+    background: rgba(25, 118, 210, 0.16) !important;
+    border-color: rgba(25, 118, 210, 0.48) !important;
 }
 
 .ipmi-shell input[type="button"]:disabled,
@@ -800,7 +979,10 @@ body.azure.dark .ipmi-actions--sticky {
 .ipmi-shell button:disabled {
     opacity: 0.55;
     cursor: not-allowed;
-    transform: none;
+    background-color: var(--ipmi-color-surface-soft) !important;
+    border-color: var(--ipmi-color-border) !important;
+    color: var(--ipmi-color-text-soft) !important;
+    transform: translateZ(0);
 }
 
 .ipmi-alert,
@@ -1104,7 +1286,8 @@ body.azure.dark .ipmi-fan-card {
 .ipmi-fan-field-group {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+    align-items: start;
     gap: var(--ipmi-space-3) var(--ipmi-space-4);
     margin-bottom: var(--ipmi-space-4);
     padding: var(--ipmi-space-4);
@@ -1136,6 +1319,205 @@ body.azure.dark .ipmi-fan-card {
     color: var(--ipmi-color-text-soft);
     font-size: 13px;
     line-height: 1.55;
+}
+
+.ipmi-fan-live-reading {
+    color: var(--ipmi-color-primary);
+    font-weight: 600;
+}
+
+.ipmi-field--curve-editor {
+    grid-column: 2;
+    min-width: 0;
+}
+
+.ipmi-fan-curve-editor {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-top: var(--ipmi-space-2);
+    padding: var(--ipmi-space-3);
+    border-radius: var(--ipmi-radius-md);
+    border: 1px solid var(--ipmi-color-border);
+    background: var(--ipmi-color-surface);
+}
+
+.ipmi-fan-curve-editor--disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.ipmi-fan-curve-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 6px var(--ipmi-space-3);
+    margin-bottom: var(--ipmi-space-2);
+}
+
+.ipmi-fan-curve-toolbar__group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ipmi-space-2);
+    min-width: 0;
+}
+
+.ipmi-fan-curve-toolbar__group--actions {
+    margin-left: auto;
+}
+
+.ipmi-shell .ipmi-fan-curve-toolbar .ipmi-inline-button {
+    width: auto !important;
+    min-height: 30px !important;
+    margin-top: 0;
+    padding: 4px 10px !important;
+    font-size: 12px;
+}
+
+.ipmi-fan-curve-toolbar__label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ipmi-color-text-soft);
+}
+
+.ipmi-fan-curve-svg-wrap {
+    width: 100%;
+    border-radius: var(--ipmi-radius-sm);
+    border: 1px solid var(--ipmi-color-border);
+    background: var(--ipmi-color-surface-soft);
+    overflow: hidden;
+}
+
+.ipmi-fan-curve-bg {
+    fill: #f7fbff;
+    stroke: rgba(51, 65, 85, 0.16);
+    stroke-width: 1;
+}
+
+.ipmi-fan-curve-svg {
+    display: block;
+    width: 100%;
+    max-width: none;
+    height: auto;
+    color: var(--ipmi-color-text);
+}
+
+.ipmi-fan-curve-grid {
+    stroke: rgba(93, 107, 130, 0.18);
+    stroke-width: 0.8;
+}
+
+.ipmi-fan-curve-axis {
+    stroke: rgba(22, 33, 51, 0.45);
+    stroke-width: 1;
+}
+
+.ipmi-fan-curve-reading {
+    stroke: var(--ipmi-color-primary);
+    stroke-width: 1.5;
+    stroke-dasharray: 4 4;
+    opacity: 0.8;
+}
+
+.ipmi-fan-curve-line {
+    fill: none;
+    stroke: var(--ipmi-color-primary);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.ipmi-fan-curve-point {
+    fill: var(--ipmi-color-surface);
+    stroke: var(--ipmi-color-primary);
+    stroke-width: 2;
+}
+
+.ipmi-fan-curve-point.is-selected {
+    fill: var(--ipmi-color-primary);
+    stroke: #ffffff;
+    stroke-width: 2.25;
+}
+
+.ipmi-fan-curve-label {
+    fill: var(--ipmi-color-text-soft);
+    font-family: var(--ipmi-font-body);
+    font-size: 9px;
+    font-weight: 600;
+}
+
+.ipmi-fan-curve-label--axis {
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.ipmi-fan-curve-inspector {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px var(--ipmi-space-2);
+    margin-top: var(--ipmi-space-2);
+}
+
+.ipmi-fan-curve-inspector__label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ipmi-color-text-soft);
+    margin-right: var(--ipmi-space-2);
+}
+
+.ipmi-fan-curve-inspector__unit {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ipmi-color-text-soft);
+}
+
+.ipmi-fan-curve-inp-t,
+.ipmi-fan-curve-inp-p {
+    width: 76px;
+    min-height: 34px;
+}
+
+.ipmi-fan-curve-help {
+    margin-top: var(--ipmi-space-2);
+    max-width: 72ch;
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+body.dark .ipmi-fan-curve-bg,
+body.black .ipmi-fan-curve-bg,
+body.azure.dark .ipmi-fan-curve-bg {
+    fill: #0f1724;
+    stroke: rgba(148, 163, 184, 0.24);
+}
+
+body.dark .ipmi-fan-curve-grid,
+body.black .ipmi-fan-curve-grid,
+body.azure.dark .ipmi-fan-curve-grid {
+    stroke: rgba(148, 163, 184, 0.16);
+}
+
+body.dark .ipmi-fan-curve-axis,
+body.black .ipmi-fan-curve-axis,
+body.azure.dark .ipmi-fan-curve-axis {
+    stroke: rgba(226, 232, 240, 0.4);
+}
+
+.ipmi-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 .ipmi-fan-mode-hint {
@@ -1247,8 +1629,7 @@ body.azure.dark .ipmi-fan-card {
     width: 96px;
 }
 
-.ipmi-tool-shell,
-.ipmi-editor-shell {
+.ipmi-tool-shell {
     margin-top: -6px;
 }
 
@@ -1273,31 +1654,313 @@ body.azure.dark .ipmi-fan-card {
     color: var(--ipmi-color-text-soft);
 }
 
-.ipmi-editor-toolbar {
+/* Config editor — same gradient hero as Settings / Fan (uses .ipmi-page-hero) */
+.ipmi-editor-hero.ipmi-page-hero {
+    grid-template-columns: minmax(0, 1.35fr) minmax(240px, 0.95fr);
+    grid-template-rows: auto;
+}
+
+.ipmi-editor-hero h1 {
+    margin: 0;
+    font-family: var(--ipmi-font-display);
+    font-size: clamp(26px, 3.2vw, 36px);
+}
+
+.ipmi-editor-hero__lead {
+    margin: var(--ipmi-space-3) 0 0;
+    max-width: 62ch;
+    color: rgba(255, 255, 255, 0.86);
+    font-size: 15px;
+    line-height: 1.65;
+}
+
+.ipmi-editor-hero__aside-title {
+    margin: 0 0 var(--ipmi-space-2);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.74);
+}
+
+.ipmi-editor-shortcut-list {
+    margin: 0;
+    padding-left: var(--ipmi-space-4);
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.92);
+    line-height: 1.7;
+}
+
+.ipmi-editor-shortcut-list kbd {
+    display: inline-block;
+    padding: 1px 6px;
+    margin: 0 1px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(7, 19, 36, 0.35);
+    color: #f8fafc;
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.ipmi-editor-risk {
+    margin-bottom: var(--ipmi-space-5);
+}
+
+.ipmi-editor-layout {
+    display: grid;
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+    gap: var(--ipmi-space-6);
+    align-items: start;
+}
+
+.ipmi-editor-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ipmi-space-4);
+}
+
+.ipmi-editor-panel {
+    padding: var(--ipmi-space-5);
+    border-radius: var(--ipmi-radius-md);
+    border: 1px solid var(--ipmi-color-border);
+    background: var(--ipmi-color-surface);
+    box-shadow: var(--ipmi-shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--ipmi-space-4);
+    min-width: 0;
+}
+
+.ipmi-editor-panel--accent {
+    border-color: rgba(25, 118, 210, 0.35);
+    background: var(--ipmi-color-primary-soft);
+}
+
+.ipmi-editor-panel__title {
+    margin: 0 0 var(--ipmi-space-4);
+    font-family: var(--ipmi-font-display);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ipmi-color-text);
+}
+
+.ipmi-editor-panel__copy {
+    margin: calc(-1 * var(--ipmi-space-2)) 0 var(--ipmi-space-4);
+    font-size: 13px;
+    color: var(--ipmi-color-text-soft);
+    line-height: 1.6;
+}
+
+.ipmi-editor-file-select {
+    width: 100%;
+    max-width: 100%;
+}
+
+.ipmi-editor-panel > .ipmi-field {
+    margin: 0;
+}
+
+.ipmi-editor-legend {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--ipmi-color-border);
+    border-radius: var(--ipmi-radius-sm);
+    overflow: hidden;
+    background: var(--ipmi-color-surface-soft);
+}
+
+.ipmi-editor-legend-item {
+    margin: 0;
+    padding: var(--ipmi-space-3) var(--ipmi-space-4);
+    border-top: 1px solid var(--ipmi-color-border);
+}
+
+.ipmi-editor-legend-item:first-child {
+    border-top: none;
+}
+
+.ipmi-editor-legend-item__title {
+    margin: 0 0 6px;
+    padding: 0;
+    font-family: var(--ipmi-font-display);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ipmi-color-text);
+    line-height: 1.3;
+}
+
+.ipmi-editor-legend-item__text {
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--ipmi-color-text-soft);
+}
+
+.ipmi-editor-legend-item__text code {
+    display: inline;
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    word-break: break-all;
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid var(--ipmi-color-border);
+    background: var(--ipmi-color-surface);
+    color: var(--ipmi-color-text);
+}
+
+.ipmi-editor-autoload {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--ipmi-space-4);
+    margin: 0;
+    padding: var(--ipmi-space-4) 0 0;
+    border-top: 1px solid var(--ipmi-color-border);
+    width: 100%;
+    box-sizing: border-box;
+    clear: both;
+    min-height: 0;
+}
+
+.ipmi-editor-autoload__copy {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ipmi-editor-autoload__label {
+    display: block;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.ipmi-editor-autoload__hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--ipmi-color-text-soft);
+    line-height: 1.5;
+}
+
+.ipmi-editor-autoload__switch {
+    flex: 0 0 auto;
+    margin-top: 0;
+}
+
+.ipmi-editor-autoload .status {
+    position: relative;
+    float: none;
+    clear: none;
+    margin: 0;
+    top: auto;
+    left: auto;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.ipmi-editor-workspace {
+    min-width: 0;
+}
+
+.ipmi-editor-workspace-card {
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.ipmi-editor-workspace-head {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--ipmi-space-3);
-    align-items: center;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--ipmi-space-4);
     margin-bottom: var(--ipmi-space-4);
 }
 
-.ipmi-editor-extras {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--ipmi-space-3);
-    margin-bottom: var(--ipmi-space-4);
+.ipmi-editor-workspace__title {
+    margin: 0;
+    font-family: var(--ipmi-font-display);
+    font-size: 18px;
 }
 
-.ipmi-editor-board-tools {
-    display: inline-flex;
+.ipmi-editor-workspace-tools {
+    display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--ipmi-space-2);
 }
 
-.ipmi-editor-toolbar .status {
+.ipmi-editor-workspace-tools .ipmi-inline-button {
     margin-top: 0;
+}
+
+.ipmi-editor-json-msg {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ipmi-color-text-soft);
+    max-width: 36ch;
+}
+
+.ipmi-editor-cm-host {
+    position: relative;
+    min-height: 280px;
+    border: 1px solid var(--ipmi-color-border);
+    border-radius: var(--ipmi-radius-md);
+    overflow: hidden;
+    background: var(--ipmi-color-surface-soft);
+}
+
+.ipmi-editor-cm-host .CodeMirror {
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    height: auto;
+}
+
+.ipmi-editor-footer .ipmi-editor-save-hint {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ipmi-color-warning);
+    max-width: 28ch;
+    line-height: 1.45;
+}
+
+.ipmi-editor-footer .ipmi-editor-save-hint .fa {
+    margin-right: 6px;
+}
+
+.ipmi-shell .ipmi-editor-btn-primary {
+    font-weight: 700;
+    padding-left: 22px;
+    padding-right: 22px;
+    background-image: none !important;
+    border-color: rgba(25, 118, 210, 0.55) !important;
+    background: var(--ipmi-color-primary-soft) !important;
+    color: var(--ipmi-color-primary) !important;
+}
+
+.ipmi-shell .ipmi-editor-btn-primary:hover {
+    background: rgba(25, 118, 210, 0.16) !important;
+    border-color: rgba(25, 118, 210, 0.48) !important;
+    box-shadow: 0 4px 14px rgba(25, 118, 210, 0.22);
+}
+
+@media (max-width: 1024px) {
+    .ipmi-editor-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .ipmi-editor-hero.ipmi-page-hero {
+        grid-template-columns: 1fr;
+    }
 }
 
 .CodeMirror {
@@ -1397,13 +2060,36 @@ body.azure.dark .ipmi-fan-card {
 .ui-icon-triangle-1-s { background-position: -64px -16px; }
 
 @media (max-width: 980px) {
-    .ipmi-page-hero,
     .ipmi-section-grid--wide {
         grid-template-columns: 1fr;
     }
 
+    .ipmi-page-hero {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+    }
+
+    .ipmi-page-hero__main,
+    .ipmi-page-hero__aside,
+    .ipmi-page-hero__strip {
+        grid-column: 1;
+        grid-row: auto;
+    }
+
+    .ipmi-page-hero__strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .ipmi-section-card {
         padding: var(--ipmi-space-5);
+    }
+
+    .ipmi-fan-field-group {
+        grid-template-columns: 1fr;
+    }
+
+    .ipmi-field--curve-editor {
+        grid-column: 1;
     }
 }
 

@@ -4,9 +4,8 @@ Tag="cogs"
 Markdown="false"
 ---
 <?php
-require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_runtime.php';
-require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_quick_nav.php';
-$ipmi_fan_menu_visible = ipmi_fan_control_menu_tab_visible();
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_options.php';
+$loadcfg = htmlspecialchars((string)ipmi_array_get($cfg, 'LOADCFG', 'disable'));
 ?>
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/ipmi.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/webGui/styles/jquery.switchbutton.css');?>">
@@ -15,63 +14,115 @@ $ipmi_fan_menu_visible = ipmi_fan_control_menu_tab_visible();
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/codemirror/dialog.min.css');?>">
 <link type="text/css" rel="stylesheet" href="<?=autov('/plugins/ipmi/css/codemirror/dracula.min.css');?>">
 
-<form id="autoload-form" method="POST" action="/update.php" target="progressFrame">
-    <input type="hidden" id="autoload" name="LOADCFG" value="disable" />
-    <input type="hidden" name="#file" value="ipmi/ipmi.cfg" />
-    <input type="hidden" name="#command" value="" />
-</form>
-
 <div class="ipmi-shell ipmi-editor-shell">
-    <div class="ipmi-tool-header">
-        <div>
-            <h1>IPMI Configuration Editor</h1>
-            <p>Inspect or edit the stored BMC configuration, sensor configuration, or board JSON with a safer editing shell and clearer actions.</p>
+    <form id="autoload-form" method="POST" action="/update.php" target="progressFrame">
+        <input type="hidden" id="autoload" name="LOADCFG" value="disable" />
+        <input type="hidden" name="#file" value="ipmi/ipmi.cfg" />
+        <input type="hidden" name="#command" value="" />
+    </form>
+    <section class="ipmi-page-hero ipmi-page-hero--no-strip ipmi-editor-hero" aria-label="Config editor introduction">
+        <div class="ipmi-editor-hero__main ipmi-page-hero__main">
+            <p class="ipmi-editor-hero__eyebrow ipmi-page-hero__eyebrow">IPMI</p>
+            <h1>Config Editor</h1>
+            <p class="ipmi-editor-hero__lead">Edit the on-disk IPMI text configs and, where applicable, commit them back to the BMC. Use <strong>Validate JSON</strong> before saving <code>board.json</code>.</p>
         </div>
-    </div>
-
-    <?php ipmi_render_quick_nav_strip('editor', ['show_fan' => $ipmi_fan_menu_visible]); ?>
-
-    <div class="ipmi-alert ipmi-alert--warning">
-        <p><strong>Edit carefully.</strong> These files can change credentials, networking, sensor thresholds, boot devices, and other low-level BMC behavior.</p>
-        <p><strong>Editor shortcuts:</strong> Ctrl/Cmd-F search, Ctrl/Cmd-G next, Shift-Ctrl/Cmd-G previous, Shift-Ctrl/Cmd-F replace, Shift-Ctrl/Cmd-R replace all.</p>
-    </div>
-
-    <section class="ipmi-section-card">
-        <form id="cfgform" method="POST">
-            <div class="ipmi-editor-toolbar">
-                <select id="editfile" name="editfile">
-                    <option>Select Config...</option>
-                    <option>Config</option>
-                    <option>Sensors</option>
-                    <option>Json</option>
-                </select>
-                <span class="status" id="load-switch" hidden><input type="checkbox" id="autoload-switch"></span>
-            </div>
-
-            <div class="ipmi-editor-extras" id="ipmi-editor-extras" hidden>
-                <button type="button" class="ipmi-inline-button" id="ipmi-editor-download" title="Save the current editor text to your computer">Download buffer</button>
-                <button type="button" class="ipmi-inline-button" id="ipmi-editor-validate-json" title="Parse as JSON before saving board.json" hidden>Validate JSON</button>
-                <span class="ipmi-inline-help" id="ipmi-editor-json-msg" role="status"></span>
-                <span class="ipmi-editor-board-tools" id="ipmi-editor-board-tools" hidden>
-                    <label for="ipmi-board-backup-select" class="ipmi-field__label" style="display:inline;margin-right:8px;">board.json backup</label>
-                    <select id="ipmi-board-backup-select" name="ipmi_board_backup"></select>
-                    <button type="button" class="ipmi-inline-button" id="ipmi-board-restore">Restore selected</button>
-                </span>
-            </div>
-
-            <textarea id="editcfg" name="ipmicfg" placeholder="Select IPMI Configuration above." autocomplete="" focus></textarea>
-            <input type="hidden" id="commit" name="commit" value="1" />
-            <input type="hidden" id="ipmiconfig" name="config" value="1" />
-            <input type="hidden" name="csrf_token" value="<?=$var['csrf_token']?>" />
-
-            <div class="ipmi-actions">
-                <input type="button" value="Revert" id="btnRevert" title="Reset the stored IPMI config file to the existing BMC config" />
-                <input type="button" value="Save" id="btnSubmit" title="Save IPMI configuration changes to the BMC" />
-                <input type="button" value="Cancel" id="btnCancel" />
-                <span class="warning"><i class="fa fa-warning icon warning"></i> Live BMC configuration changes apply immediately when saved.</span>
-            </div>
-        </form>
+        <aside class="ipmi-editor-hero__aside ipmi-page-hero__aside" aria-label="Editor shortcuts">
+            <p class="ipmi-editor-hero__aside-title">Keyboard</p>
+            <ul class="ipmi-editor-shortcut-list">
+                <li><kbd>Ctrl</kbd> / <kbd>Cmd</kbd> + <kbd>F</kbd> search</li>
+                <li><kbd>Ctrl</kbd> + <kbd>G</kbd> next · <kbd>Shift</kbd> + <kbd>Ctrl</kbd> + <kbd>G</kbd> previous</li>
+                <li><kbd>Shift</kbd> + <kbd>Ctrl</kbd> + <kbd>F</kbd> replace · <kbd>R</kbd> replace all</li>
+            </ul>
+        </aside>
     </section>
+
+    <div class="ipmi-alert ipmi-alert--warning ipmi-editor-risk">
+        <p><strong>Risk.</strong> These files affect BMC credentials, networking, sensor thresholds, boot behavior, and fan mapping. Keep a backup before wide edits.</p>
+    </div>
+
+    <form id="cfgform" method="POST" class="ipmi-editor-layout">
+        <aside class="ipmi-editor-sidebar" aria-label="File and options">
+            <section class="ipmi-editor-panel">
+                <h2 class="ipmi-editor-panel__title">File</h2>
+                <div class="ipmi-field ipmi-field--full">
+                    <label class="ipmi-field__label" for="editfile">Open</label>
+                    <select id="editfile" name="editfile" class="ipmi-editor-file-select" title="Choose which configuration to load into the editor">
+                        <option value="">Select a configuration…</option>
+                        <option value="config">BMC config (ipmi.config)</option>
+                        <option value="sensors">Sensor config (ipmi-sensors.config)</option>
+                        <option value="json">board.json</option>
+                    </select>
+                    <p class="ipmi-field__help" id="ipmi-editor-file-hint">Choose a file to load from disk or the BMC.</p>
+                </div>
+                <div class="ipmi-editor-legend" role="region" aria-label="What each file does">
+                    <div class="ipmi-editor-legend-item">
+                        <h3 class="ipmi-editor-legend-item__title">BMC config</h3>
+                        <p class="ipmi-editor-legend-item__text">Checked out from the BMC. Saving writes the file and runs <code>ipmi-config --commit</code>.</p>
+                    </div>
+                    <div class="ipmi-editor-legend-item">
+                        <h3 class="ipmi-editor-legend-item__title">Sensor config</h3>
+                        <p class="ipmi-editor-legend-item__text">Sensor thresholds and related lines. Saving uses the IPMI sensors config tool and commits like BMC config.</p>
+                    </div>
+                    <div class="ipmi-editor-legend-item">
+                        <h3 class="ipmi-editor-legend-item__title">board.json</h3>
+                        <p class="ipmi-editor-legend-item__text">Fan header map and profile metadata. Must be valid JSON before save.</p>
+                    </div>
+                </div>
+                <div class="ipmi-editor-autoload" id="load-switch" hidden>
+                    <div class="ipmi-editor-autoload__copy">
+                        <span class="ipmi-editor-autoload__label">Load when Unraid starts</span>
+                        <span class="ipmi-editor-autoload__hint">When enabled, the sensor config is applied automatically when Unraid starts.</span>
+                    </div>
+                    <div class="ipmi-editor-autoload__switch"><span class="status"><input type="checkbox" id="autoload-switch" aria-label="Load sensor config when Unraid starts"></span></div>
+                </div>
+            </section>
+
+            <section class="ipmi-editor-panel ipmi-editor-panel--accent" id="ipmi-editor-board-tools" hidden>
+                <h2 class="ipmi-editor-panel__title">board.json backups</h2>
+                <p class="ipmi-editor-panel__copy">Restore a timestamped backup written by the plugin. The buffer reloads after restore.</p>
+                <div class="ipmi-field ipmi-field--full">
+                    <label class="ipmi-field__label" for="ipmi-board-backup-select">Backup file</label>
+                    <select id="ipmi-board-backup-select" name="ipmi_board_backup" class="ipmi-editor-file-select"></select>
+                </div>
+                <button type="button" class="ipmi-inline-button" id="ipmi-board-restore">Restore selected backup</button>
+            </section>
+        </aside>
+
+        <div class="ipmi-editor-workspace">
+            <section class="ipmi-section-card ipmi-editor-workspace-card">
+                <div class="ipmi-editor-workspace-head">
+                    <div class="ipmi-editor-workspace-head__titles">
+                        <h2 class="ipmi-editor-workspace__title">Buffer</h2>
+                        <p class="ipmi-card-subcopy" id="ipmi-editor-buffer-label">No file loaded.</p>
+                    </div>
+                    <div class="ipmi-editor-workspace-tools" id="ipmi-editor-extras" hidden>
+                        <button type="button" class="ipmi-inline-button" id="ipmi-editor-download" title="Download the current editor text">Download</button>
+                        <button type="button" class="ipmi-inline-button" id="ipmi-editor-validate-json" title="Parse buffer as JSON" hidden>Validate JSON</button>
+                        <span class="ipmi-editor-json-msg" id="ipmi-editor-json-msg" role="status"></span>
+                    </div>
+                </div>
+
+                <div class="ipmi-editor-cm-host">
+                    <textarea id="editcfg" name="ipmicfg" placeholder="Choose a file in the left panel to load its contents." autocomplete="off"></textarea>
+                </div>
+
+                <input type="hidden" id="commit" name="commit" value="1" />
+                <input type="hidden" id="ipmiconfig" name="config" value="1" />
+                <input type="hidden" name="csrf_token" value="<?=$var['csrf_token']?>" />
+
+                <div class="ipmi-actions ipmi-actions--split ipmi-actions--sticky ipmi-editor-footer">
+                    <div class="ipmi-actions__group">
+                        <button type="button" id="btnCancel" title="Return to IPMI Settings">Cancel</button>
+                        <button type="button" id="btnRevert" title="Reload from BMC / disk without saving your edits">Revert</button>
+                    </div>
+                    <div class="ipmi-actions__group ipmi-editor-footer__save">
+                        <span class="ipmi-editor-save-hint"><i class="fa fa-warning"></i> Save applies immediately for BMC-backed configs.</span>
+                        <button type="button" id="btnSubmit" class="ipmi-editor-btn-primary" title="Write buffer to disk and commit to the BMC when applicable">Save</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </form>
 </div>
 
 <script src="<?=autov('/plugins/ipmi/js/codemirror/codemirror.min.js');?>"></script>
@@ -90,11 +141,32 @@ window.IPMI_CSRF_TOKEN = '<?=htmlspecialchars($var['csrf_token']);?>';
 
 <script>
 $(function(){
+    var $hint = $('#ipmi-editor-file-hint');
+    var $buf = $('#ipmi-editor-buffer-label');
+    var fileHints = [
+        'Choose a file to load from disk or the BMC.',
+        'BMC configuration (ipmi.config). Revert reloads from the BMC; Save writes the file and runs commit.',
+        'Sensor configuration (ipmi-sensors.config). Same commit path as BMC config, using the sensors tool.',
+        'Fan mapping JSON. Validate before save; invalid JSON is rejected.'
+    ];
+    var bufferLabels = [
+        'No file loaded.',
+        'Editing ipmi.config',
+        'Editing ipmi-sensors.config',
+        'Editing board.json'
+    ];
+
+    function ipmiEditorSyncFileChrome() {
+        var idx = $('#editfile')[0].selectedIndex;
+        $hint.text(fileHints[idx] || fileHints[0]);
+        $buf.text(bufferLabels[idx] || bufferLabels[0]);
+    }
+
     //autoload switch
     $('#autoload-switch').switchButton({
-        labels_placement: 'left',
-        on_label: 'Load Config @ unRAID Start',
-        off_label: 'Load Config @ unRAID Start',
+        labels_placement: 'right',
+        on_label: 'On',
+        off_label: 'Off',
         checked: ("<?=$loadcfg;?>" == 'enable')
     })
     .change(function () {
@@ -112,10 +184,7 @@ $(function(){
     $('#editfile').on('change', function () {
         var Config = $('#editfile')[0].selectedIndex -1;
 
-        if (Config == 1)
-            $('#load-switch').show();
-        else
-            $('#load-switch').hide();
+        $('#load-switch').prop('hidden', Config !== 1);
 
         $('#ipmi-editor-json-msg').text('');
         if (Config >= 0) {
@@ -133,15 +202,23 @@ $(function(){
             $('#ipmi-editor-board-tools').prop('hidden', true);
         }
 
+        ipmiEditorSyncFileChrome();
+
         if (Config != -1){
             $('#ipmiconfig').val(Config);
             ipmiPost('/plugins/ipmi/include/ipmi_config.php', {ipmicfg:null, config:Config}, function (data) {
                     editor.setValue(data.config || '');
+                    if (typeof window.ipmiSizeEditor === 'function')
+                        window.ipmiSizeEditor();
                 }
             );
         }else{
             editor.setValue('');
+            if (typeof window.ipmiSizeEditor === 'function')
+                window.ipmiSizeEditor();
         }
+        if (typeof window.ipmiSizeEditor === 'function')
+            window.ipmiSizeEditor();
     });
 
     $('#ipmi-editor-download').on('click', function () {
@@ -192,9 +269,22 @@ $(function(){
         hintOptions: {}
     });
 
-    $('#tab3').click(function () {
-        editor.refresh();
-    });
+    window.ipmiSizeEditor = function() {
+        var wrap = editor.getWrapperElement();
+        if (!wrap || !wrap.getBoundingClientRect)
+            return;
+        var top = wrap.getBoundingClientRect().top;
+        var h = Math.max(280, window.innerHeight - top - 120);
+        editor.setSize(null, h);
+    };
+    $(window).on('resize', function() { window.ipmiSizeEditor(); });
+    window.ipmiSizeEditor();
+    ipmiEditorSyncFileChrome();
+
+    if (typeof ipmiOnMainTabClick === 'function')
+        ipmiOnMainTabClick(/config editor/i, function() {
+            window.setTimeout(function() { editor.refresh(); }, 150);
+        });
 
     // save config and commit to bmc
     $('#btnSubmit').click(function () {
@@ -235,11 +325,11 @@ function commitConfig() {
         }
         $('#ipmiconfig').val(Config);
         ipmiPost('/plugins/ipmi/include/ipmi_config.php', $('#cfgform').serializeArray(),function (data, response) {
-            swal({title:'IPMI Sensors Configuration',text:response.message || 'saved',type:'success',closeOnConfirm: true,},function() {
+            swal({title:'Config Editor',text:response.message || 'saved',type:'success',closeOnConfirm: true,},function() {
                 location = '/Settings/IPMI';
             });
         }, function(response) {
-            swal({title:'IPMI Sensors Configuration',text:ipmiResponseText(response),type:'error'});
+            swal({title:'Config Editor',text:ipmiResponseText(response),type:'error'});
         }, { button: document.getElementById('btnSubmit') });
     }
 }
@@ -248,11 +338,11 @@ function revertConfig() {
     var Config = $('#editfile')[0].selectedIndex -1;
     if (Config != -1){
         ipmiPost('/plugins/ipmi/include/ipmi_config.php', {ipmicfg:null, config:Config}, function (data, response) {
-            swal({title:'IPMI Sensors Configuration',text:response.message || 'reloaded from bmc',type:'success',closeOnConfirm: true,},function() {
+            swal({title:'Config Editor',text:response.message || 'reloaded from bmc',type:'success',closeOnConfirm: true,},function() {
                 location.reload(true);
             });
         }, function(response) {
-            swal({title:'IPMI Sensors Configuration',text:ipmiResponseText(response),type:'error'});
+            swal({title:'Config Editor',text:ipmiResponseText(response),type:'error'});
         });
     }
 }

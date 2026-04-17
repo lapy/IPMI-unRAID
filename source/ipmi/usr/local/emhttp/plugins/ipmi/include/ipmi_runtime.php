@@ -148,7 +148,7 @@ function ipmi_read_ini_config($path, $process_sections=false) {
     if (!is_file($path))
         return [];
 
-    $data = @parse_ini_file($path, $process_sections);
+    $data = @parse_ini_file($path, $process_sections, INI_SCANNER_RAW);
     return is_array($data) ? $data : [];
 }
 

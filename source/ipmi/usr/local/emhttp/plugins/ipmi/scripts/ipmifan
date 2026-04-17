@@ -5,6 +5,7 @@
 ##############################
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_options.php';
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_settings_fan.php';
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_fan_curve.php';
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_drives.php';
 require_once '/usr/local/emhttp/plugins/dynamix/include/Helpers.php';
 
@@ -550,12 +551,8 @@ while(TRUE){ while(TRUE){
             $temp = isset($fancfg["TEMP_$fan"]) ? $fancfg["TEMP_$fan"] : '';
          #   echo "temp:".$temp;
             if(!empty($temp)) {
-                $templo  = (isset($fancfg["TEMPLO_$fan"])) ? intval($fancfg["TEMPLO_$fan"])  : 30;
-                $temphi  = (isset($fancfg["TEMPHI_$fan"])) ? intval($fancfg["TEMPHI_$fan"])  : 45;
                 $fanmin  = (isset($fancfg["FANMIN_$fan"])) ? intval($fancfg["FANMIN_$fan"])  : 16;
                 $fanmax  = (isset($fancfg["FANMAX_$fan"])) ? intval($fancfg["FANMAX_$fan"])  : $range;
-                $temploo  = (isset($fancfg["TEMPLOO_$fan"])) ? intval($fancfg["TEMPLOO_$fan"])  : 30;
-                $temphio  = (isset($fancfg["TEMPHIO_$fan"])) ? intval($fancfg["TEMPHIO_$fan"])  : 45;
                 $fanmino  = (isset($fancfg["FANMINO_$fan"])) ? intval($fancfg["FANMINO_$fan"])  : 16;
                 $fanmaxo  = (isset($fancfg["FANMAXO_$fan"])) ? intval($fancfg["FANMAXO_$fan"])  : $range;
                 $reading = floatval($sensors[$temp]['Reading']);
@@ -570,49 +567,15 @@ while(TRUE){ while(TRUE){
                     }  
                 }
                 if ($use_override) {
-                    if ($reading <= $temploo){
-                        $pct = 0;
-                        $pwm = 1;
-                    }elseif ($reading >= $temphio){
-                        $pct = 1;
-                        $pwm = $range;
-                    }else{
-                        $pct = ($reading-$temploo)/($temphio-$temploo)*($fanmaxo-$fanmino)/$range + $fanmino/$range;
-                        $pwm = round(($pct)*($range/4))*4; //round
-                    }
-                    //impose fan lower limit
-                    if ($pwm <= $fanmino){
-                        $pwm  = $fanmino;
-                        $pct  = $fanmino/$range;
-                    }
-
-                    //impose fan upper limit
-                    if ($pwm >= $fanmaxo){
-                        $pwm  = $fanmaxo;
-                        $pct  = $fanmaxo/$range;
-                    }
+                    $curve_pts = ipmi_fan_curve_override_points($fancfg, $fan, $range);
+                    $res = ipmi_fan_curve_compute_pwm($reading, $curve_pts, $range, $fanmino, $fanmaxo);
+                    $pwm = $res['pwm'];
+                    $pct = $res['pct'];
                 } else {
-                    if ($reading <= $templo){
-                        $pct = 0;
-                        $pwm = 1;
-                    }elseif ($reading >= $temphi){
-                        $pct = 1;
-                        $pwm = $range;
-                    }else{
-                        $pct = ($reading-$templo)/($temphi-$templo)*($fanmax-$fanmin)/$range + $fanmin/$range;
-                        $pwm = round(($pct)*($range/4))*4; //round
-                    }
-                    //impose fan lower limit
-                    if ($pwm <= $fanmin){
-                        $pwm  = $fanmin;
-                        $pct  = $fanmin/$range;
-                    }
-
-                    //impose fan upper limit
-                    if ($pwm >= $fanmax){
-                        $pwm  = $fanmax;
-                        $pct  = $fanmax/$range;
-                    }
+                    $curve_pts = ipmi_fan_curve_primary_points($fancfg, $fan, $range);
+                    $res = ipmi_fan_curve_compute_pwm($reading, $curve_pts, $range, $fanmin, $fanmax);
+                    $pwm = $res['pwm'];
+                    $pct = $res['pct'];
                 }
                 if (is_asrock_family() && $pwm_min > 1 && $pwm < $pwm_min){
                     $pwm = $pwm_min;
@@ -627,7 +590,7 @@ while(TRUE){ while(TRUE){
                 $pwm = str_pad($pwm, 2, '0', STR_PAD_LEFT);
 
                 //add fan, value, temp sensor name and reading
-                $pct  = str_pad(round($pct*100), 2, ' ', STR_PAD_LEFT);
+                $pct  = str_pad(round(($pwm / $range) * 100), 2, ' ', STR_PAD_LEFT);
                 if ($reading <= 0) $mytemp = "Spundown" ; else $mytemp = str_replace([" ","&#8201;&#176;"],["",""],my_temp($reading));
                 $msg .= ", {$fan}({$pct}%):".str_replace('Temperature','Temp',$name)."($mytemp)";
 

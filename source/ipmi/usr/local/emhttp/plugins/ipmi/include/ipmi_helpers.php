@@ -2,6 +2,7 @@
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_options.php';
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_drives.php';
 require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_fan_profiles.php';
+require_once '/usr/local/emhttp/plugins/ipmi/include/ipmi_fan_curve.php';
 require_once '/usr/local/emhttp/plugins/dynamix/include/Helpers.php';
 
 $action = htmlspecialchars((string)ipmi_array_get($_REQUEST, 'action', ''));
@@ -350,6 +351,94 @@ function ipmi_fan_sensors($ignore=null) {
     unset($sensors);
 }
 
+/**
+ * Graph-first fan curve editor (primary or HDD override). Syncs legacy INI keys via hidden inputs.
+ *
+ * @param string $kind 'primary'|'override'
+ * @param float|null $readingC primary sensor reading in Celsius, or null
+ */
+function ipmi_fan_curve_render_editor($fanName, $kind, $range, $display_unit, $curveController, $readingC, array $fancfg) {
+    $id_safe = preg_replace('/[^A-Za-z0-9_-]+/', '_', (string)$fanName);
+    $is_override = ($kind === 'override');
+    $points = $is_override
+        ? ipmi_fan_curve_override_points($fancfg, $fanName, $range)
+        : ipmi_fan_curve_primary_points($fancfg, $fanName, $range);
+    $wire = htmlspecialchars(ipmi_fan_curve_wire_encode($points), ENT_QUOTES, 'UTF-8');
+
+    if ($is_override) {
+        $curve_key = 'CURVEO_'.$fanName;
+        $lt = 'TEMPLOO_'.$fanName;
+        $hi = 'TEMPHIO_'.$fanName;
+        $lo_pwm = 'FANMINO_'.$fanName;
+        $hi_pwm = 'FANMAXO_'.$fanName;
+    } else {
+        $curve_key = 'CURVE_'.$fanName;
+        $lt = 'TEMPLO_'.$fanName;
+        $hi = 'TEMPHI_'.$fanName;
+        $lo_pwm = 'FANMIN_'.$fanName;
+        $hi_pwm = 'FANMAX_'.$fanName;
+    }
+
+    $v_lo = htmlspecialchars((string)ipmi_array_get($fancfg, $lt, ''), ENT_QUOTES, 'UTF-8');
+    $v_hi = htmlspecialchars((string)ipmi_array_get($fancfg, $hi, ''), ENT_QUOTES, 'UTF-8');
+    $v_min = htmlspecialchars((string)ipmi_array_get($fancfg, $lo_pwm, ''), ENT_QUOTES, 'UTF-8');
+    $v_max = htmlspecialchars((string)ipmi_array_get($fancfg, $hi_pwm, ''), ENT_QUOTES, 'UTF-8');
+    $fan_esc = htmlspecialchars($fanName, ENT_QUOTES, 'UTF-8');
+    $kind_esc = htmlspecialchars($kind, ENT_QUOTES, 'UTF-8');
+    $unit_esc = htmlspecialchars((string)$display_unit, ENT_QUOTES, 'UTF-8');
+    $ctrl_esc = htmlspecialchars((string)$curveController, ENT_QUOTES, 'UTF-8');
+    $temp_input_min = ($display_unit === 'F') ? 32 : IPMI_FAN_CURVE_TEMP_MIN_C;
+    $temp_input_max = ($display_unit === 'F') ? 212 : IPMI_FAN_CURVE_TEMP_MAX_C;
+    $read_attr = ($readingC !== null && is_numeric($readingC))
+        ? htmlspecialchars((string)floatval($readingC), ENT_QUOTES, 'UTF-8')
+        : '';
+
+    echo '<div class="ipmi-fan-curve-editor" data-fan="', $fan_esc, '" data-curve-kind="', $kind_esc, '" data-range="', intval($range), '" data-display-unit="', $unit_esc, '" data-curve-controller="', $ctrl_esc, '"';
+    if ($read_attr !== '')
+        echo ' data-reading-c="', $read_attr, '"';
+    echo '>';
+
+    echo '<div class="ipmi-fan-curve-toolbar" role="toolbar" aria-label="Curve presets">';
+    echo '<div class="ipmi-fan-curve-toolbar__group">';
+    echo '<span class="ipmi-fan-curve-toolbar__label">Presets</span>';
+    echo '<button type="button" class="ipmi-inline-button ipmi-fan-curve-preset" data-preset="quiet">Quiet</button>';
+    echo '<button type="button" class="ipmi-inline-button ipmi-fan-curve-preset" data-preset="balanced">Balanced</button>';
+    echo '<button type="button" class="ipmi-inline-button ipmi-fan-curve-preset" data-preset="performance">Performance</button>';
+    echo '<button type="button" class="ipmi-inline-button ipmi-fan-curve-preset" data-preset="flat">Flat min</button>';
+    echo '</div>';
+    echo '<div class="ipmi-fan-curve-toolbar__group ipmi-fan-curve-toolbar__group--actions">';
+    echo '<button type="button" class="ipmi-inline-button ipmi-fan-curve-add" title="Add a point">Add point</button>';
+    echo '<button type="button" class="ipmi-inline-button ipmi-fan-curve-remove" title="Remove selected point">Remove</button>';
+    echo '</div>';
+    echo '</div>';
+
+    echo '<div class="ipmi-fan-curve-svg-wrap">';
+    echo '<svg class="ipmi-fan-curve-svg" viewBox="0 0 420 184" role="img" aria-label="Fan speed versus temperature">';
+    echo '<rect class="ipmi-fan-curve-bg" x="0" y="0" width="420" height="184" rx="8"/>';
+    echo '<g class="ipmi-fan-curve-plot"></g>';
+    echo '</svg>';
+    echo '</div>';
+
+    echo '<div class="ipmi-fan-curve-inspector">';
+    echo '<span class="ipmi-fan-curve-inspector__label">Selected point</span>';
+    echo '<label class="ipmi-sr-only" for="fan-curve-t-', $id_safe, '-', $kind_esc, '">Temperature</label>';
+    echo '<input type="number" class="ipmi-fan-curve-inp-t" id="fan-curve-t-', $id_safe, '-', $kind_esc, '" step="1" min="', intval($temp_input_min), '" max="', intval($temp_input_max), '" value="30" />';
+    echo '<span class="ipmi-fan-curve-inspector__unit">', ($display_unit === 'F' ? 'F' : 'C'), '</span>';
+    echo '<label class="ipmi-sr-only" for="fan-curve-p-', $id_safe, '-', $kind_esc, '">Duty percent</label>';
+    echo '<input type="number" class="ipmi-fan-curve-inp-p" id="fan-curve-p-', $id_safe, '-', $kind_esc, '" step="0.1" min="0" max="100" value="25" />';
+    echo '<span class="ipmi-fan-curve-inspector__unit">%</span>';
+    echo '</div>';
+
+    echo '<input type="hidden" name="', htmlspecialchars($curve_key, ENT_QUOTES, 'UTF-8'), '" class="ipmi-fan-curve-wire" value="', $wire, '" />';
+    echo '<input type="hidden" name="', htmlspecialchars($lt, ENT_QUOTES, 'UTF-8'), '" class="ipmi-fan-curve-legacy ipmi-fan-curve-legacy-lo ', htmlspecialchars($curveController, ENT_QUOTES, 'UTF-8'), '" value="', $v_lo, '" />';
+    echo '<input type="hidden" name="', htmlspecialchars($hi, ENT_QUOTES, 'UTF-8'), '" class="ipmi-fan-curve-legacy ipmi-fan-curve-legacy-hi ', htmlspecialchars($curveController, ENT_QUOTES, 'UTF-8'), '" value="', $v_hi, '" />';
+    echo '<input type="hidden" name="', htmlspecialchars($lo_pwm, ENT_QUOTES, 'UTF-8'), '" class="ipmi-fan-curve-legacy ipmi-fan-curve-legacy-min ', htmlspecialchars($curveController, ENT_QUOTES, 'UTF-8'), '" value="', $v_min, '" />';
+    echo '<input type="hidden" name="', htmlspecialchars($hi_pwm, ENT_QUOTES, 'UTF-8'), '" class="ipmi-fan-curve-legacy ipmi-fan-curve-legacy-max ', htmlspecialchars($curveController, ENT_QUOTES, 'UTF-8'), '" value="', $v_max, '" />';
+
+    echo '<p class="ipmi-field__help ipmi-fan-curve-help">Drag points to shape the curve inside a fixed 0–100 C by 0–100% grid. Duty maps to the board PWM scale (0–', intval($range), '), and the dashed line shows the live sensor reading when available.</p>';
+    echo '</div>';
+}
+
 /* get all fan options for fan control */
 function get_fanctrl_options(){
     global $fansensors, $fancfg, $board, $board_model, $board_json, $board_file_status, $board_status, $cmd_count, $range, $display_unit;
@@ -456,18 +545,33 @@ function get_fanctrl_options(){
             }
         }
 
+        $curve_primary = ipmi_fan_curve_primary_points($fancfg, $name, $range);
+        $curve_override_pts = ipmi_fan_curve_override_points($fancfg, $name, $range);
+        $read_primary_c = (!empty($temp['Name']) && isset($temp['Reading'])) ? floatval($temp['Reading']) : null;
+        $read_override_c = (!empty($temphddd['Name']) && isset($temphddd['Reading'])) ? floatval($temphddd['Reading']) : null;
+
         $normal_sensor_name = !empty($temp['Name']) ? htmlspecialchars($temp['Name']) : 'Auto';
+        $normal_sensor_help = !empty($temp['Name'])
+            ? 'Current reading: '.my_temp(floatval($temp['Reading']))
+            : 'Current reading follows the BMC firmware curve.';
         $normal_sensor_meta = !empty($temp['Name'])
             ? my_temp(floatval($temp['Reading'])).' reading'
             : 'Firmware controls the curve when no sensor is selected';
-        $normal_curve = $fancfg[$templo].' to '.$fancfg[$temphi].' deg'.$display_unit;
-        $normal_duty = number_format((intval(intval($fancfg[$fanmin]) / $range * 1000) / 10), 1).'% to '.number_format((intval(intval($fancfg[$fanmax]) / $range * 1000) / 10), 1).'%';
+        $normal_curve = ipmi_fan_curve_format_summary($curve_primary, $display_unit);
+        $p0 = intval($curve_primary[0]['p']);
+        $p1 = intval($curve_primary[count($curve_primary) - 1]['p']);
+        $normal_duty = number_format((intval(intval($p0) / $range * 1000) / 10), 1).'% to '.number_format((intval(intval($p1) / $range * 1000) / 10), 1).'%';
         $override_sensor_name = !empty($temphddd['Name']) ? htmlspecialchars($temphddd['Name']) : 'None';
+        $override_sensor_help = !empty($temphddd['Name'])
+            ? 'Current reading: '.my_temp(floatval($temphddd['Reading']))
+            : 'Select an override sensor to show its current reading.';
         $override_sensor_meta = !empty($temphddd['Name'])
             ? my_temp(floatval($temphddd['Reading'])).' reading'
             : 'No HDD spindown override configured';
-        $override_curve = $fancfg[$temploo].' to '.$fancfg[$temphio].' deg'.$display_unit;
-        $override_duty = number_format((intval(intval($fancfg[$fanmino]) / $range * 1000) / 10), 1).'% to '.number_format((intval(intval($fancfg[$fanmaxo]) / $range * 1000) / 10), 1).'%';
+        $override_curve = ipmi_fan_curve_format_summary($curve_override_pts, $display_unit);
+        $op0 = intval($curve_override_pts[0]['p']);
+        $op1 = intval($curve_override_pts[count($curve_override_pts) - 1]['p']);
+        $override_duty = number_format((intval(intval($op0) / $range * 1000) / 10), 1).'% to '.number_format((intval(intval($op1) / $range * 1000) / 10), 1).'%';
         $fan_rpm = floatval($fan['Reading']).' '.$fan['Units'];
         $override_disabled = ($fancfg[$tempid] == "99") ? '' : ' disabled';
         $override_selected = !empty($fancfg[$temphdd]) && $fancfg[$temphdd] != 0;
@@ -498,39 +602,19 @@ function get_fanctrl_options(){
 
         echo '<div class="ipmi-fan-field-group fanctrl-settings">';
         echo '<h5 class="ipmi-fan-field-group__title">Primary temperature curve</h5>';
-        echo '<p class="ipmi-fan-field-group__hint">Between the low and high thresholds the daemon ramps duty toward your minimum and maximum. Duty percentages use the board PWM scale (0–', intval($range), ').</p>';
+        echo '<p class="ipmi-fan-field-group__hint">Shape the PWM response versus temperature with multiple points. Values use the board PWM scale (0–', intval($range), '). The daemon interpolates linearly between points.</p>';
 
         echo '<div class="ipmi-field fanctrl-settings">';
         echo '<label class="ipmi-field__label" for="', $tempid, '">Temperature sensor</label>';
         echo '<select id="', $tempid, '" name="', $tempid, '" class="fanctrl-temp" data-fan-name="', $name, '">';
         echo '<option value="0">Auto</option>', get_temp_options($fancfg[$tempid]), '</select>';
         echo '<div class="ipmi-field__help">Firmware-managed curve when set to <strong>Auto</strong>. Choose a specific sensor for a custom curve. Pick <strong>HDD Temperature</strong> to enable the spindown override section below.</div>';
+        echo '<div class="ipmi-field__help ipmi-fan-live-reading" id="fan-reading-primary-', $name, '">', $normal_sensor_help, '</div>';
         echo '</div>';
 
-        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $tempid, '">';
-        echo '<label class="ipmi-field__label" for="', $temphi, '">High threshold (deg', $display_unit, ')</label>';
-        echo '<select id="', $temphi, '" name="', $temphi, '" class="', $tempid, '">', get_temp_range('HI', $fancfg[$temphi], $display_unit), '</select>';
-        echo '<div class="ipmi-field__help">At or above this point the header runs at its configured maximum.</div>';
-        echo '</div>';
-
-        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $tempid, '">';
-        echo '<label class="ipmi-field__label" for="', $templo, '">Low threshold (deg', $display_unit, ')</label>';
-        echo '<select id="', $templo, '" name="', $templo, '" class="', $tempid, '">', get_temp_range('LO', $fancfg[$templo], $display_unit), '</select>';
-        echo '<div class="ipmi-field__help">Below this point the header can fall to its configured minimum.</div>';
-        echo '</div>';
-
-        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $tempid, '">';
-        echo '<label class="ipmi-field__label" for="', $fanmax, '">Maximum duty</label>';
-        echo '<select id="', $fanmax, '" name="', $fanmax, '" class="', $tempid, '">', get_minmax_options('HI', $fancfg[$fanmax]), '</select>';
-        echo '<div class="ipmi-field__help">Caps the highest duty percentage for this header.</div>';
-        echo '</div>';
-
-        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $tempid, '">';
-        echo '<label class="ipmi-field__label" for="', $fanmin, '">Minimum duty</label>';
-        echo '<select id="', $fanmin, '" name="', $fanmin, '" class="', $tempid, '">', get_minmax_options('LO', $fancfg[$fanmin]), '</select>';
-        echo '<div class="ipmi-field__help">Prevents the header from dropping below this duty percentage.</div>';
-        echo '</div>';
-
+        echo '<div class="ipmi-field ipmi-field--curve-editor fanctrl-settings" data-controlled-by="', $tempid, '">';
+        echo '<div class="ipmi-field__label">Fan curve (PWM vs temperature)</div>';
+        ipmi_fan_curve_render_editor($name, 'primary', $range, $display_unit, $tempid, $read_primary_c, $fancfg);
         echo '</div>';
 
         echo '<div class="ipmi-fan-field-group fanctrl-settings">';
@@ -542,30 +626,12 @@ function get_fanctrl_options(){
         echo '<select id="', $temphdd, '"', $override_disabled, ' name="', $temphdd, '" class="fanctrl-temp fanctrl-override-source" data-fan-name="', $name, '">';
         echo '<option value="0">None</option>', get_temp_options($fancfg[$temphdd]), '</select>';
         echo '<div class="ipmi-field__help">Optional override used while your array drives are spun down.</div>';
+        echo '<div class="ipmi-field__help ipmi-fan-live-reading" id="fan-reading-override-', $name, '">', $override_sensor_help, '</div>';
         echo '</div>';
 
-        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $temphdd, '"', ($override_selected ? '' : ' style="display:none;"'), '>';
-        echo '<label class="ipmi-field__label" for="', $temphio, '">Override high threshold (deg', $display_unit, ')</label>';
-        echo '<select id="', $temphio, '" name="', $temphio, '" class="', $temphdd, '">', get_temp_range('HI', $fancfg[$temphio], $display_unit), '</select>';
-        echo '<div class="ipmi-field__help">Upper threshold for the spindown override curve.</div>';
-        echo '</div>';
-
-        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $temphdd, '"', ($override_selected ? '' : ' style="display:none;"'), '>';
-        echo '<label class="ipmi-field__label" for="', $temploo, '">Override low threshold (deg', $display_unit, ')</label>';
-        echo '<select id="', $temploo, '" name="', $temploo, '" class="', $temphdd, '">', get_temp_range('LO', $fancfg[$temploo], $display_unit), '</select>';
-        echo '<div class="ipmi-field__help">Lower threshold for the spindown override curve.</div>';
-        echo '</div>';
-
-        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $temphdd, '"', ($override_selected ? '' : ' style="display:none;"'), '>';
-        echo '<label class="ipmi-field__label" for="', $fanmaxo, '">Override maximum duty</label>';
-        echo '<select id="', $fanmaxo, '" name="', $fanmaxo, '" class="', $temphdd, '">', get_minmax_options('HI', $fancfg[$fanmaxo]), '</select>';
-        echo '<div class="ipmi-field__help">Maximum duty while the spindown override is active.</div>';
-        echo '</div>';
-
-        echo '<div class="ipmi-field fanctrl-settings" data-controlled-by="', $temphdd, '"', ($override_selected ? '' : ' style="display:none;"'), '>';
-        echo '<label class="ipmi-field__label" for="', $fanmino, '">Override minimum duty</label>';
-        echo '<select id="', $fanmino, '" name="', $fanmino, '" class="', $temphdd, '">', get_minmax_options('LO', $fancfg[$fanmino]), '</select>';
-        echo '<div class="ipmi-field__help">Minimum duty while the spindown override is active.</div>';
+        echo '<div class="ipmi-field ipmi-field--curve-editor fanctrl-settings" data-controlled-by="', $temphdd, '"', ($override_selected ? '' : ' style="display:none;"'), '>';
+        echo '<div class="ipmi-field__label">Override fan curve (PWM vs temperature)</div>';
+        ipmi_fan_curve_render_editor($name, 'override', $range, $display_unit, $temphdd, $read_override_c, $fancfg);
         echo '</div>';
 
         echo '</div>';
@@ -583,8 +649,14 @@ function get_temp_options($selected=0){
     $options = '';
     foreach($fansensors as $id => $sensor){
         if (($sensor['Type'] === 'Temperature') || ($sensor['Name'] === 'HDD Temperature')){
-            $name = $sensor['Name'];
-            $options .= "<option value='$id'";
+            $name = htmlspecialchars($sensor['Name']);
+            if (isset($sensor['Reading'])) {
+                $reading_plain = trim(html_entity_decode(strip_tags(my_temp(floatval($sensor['Reading']))), ENT_QUOTES, 'UTF-8'));
+                $current_reading = htmlspecialchars('Current reading: '.$reading_plain, ENT_QUOTES, 'UTF-8');
+            } else {
+                $current_reading = htmlspecialchars('Current reading unavailable', ENT_QUOTES, 'UTF-8');
+            }
+            $options .= "<option value='$id' data-current-reading=\"$current_reading\"";
 
             // set saved option as selected
             if (intval($selected) === $id)
@@ -609,7 +681,7 @@ function get_temp_range($order, $selected=0,$unit = "C"){
         if (intval($selected) === $temp)
             $options .= " selected";
         if ($unit == "F") $temp=round(9/5*$temp)+32; ;
-        $options .= ">$temp</option>";
+        $options .= ">$temp $unit</option>";
     }
     return $options;
 }
@@ -628,7 +700,7 @@ function get_minmax_options($order, $selected=0){
         if (intval($selected) === $value)
             $options .= ' selected';
 
-        $options .= '>'.number_format((intval(($value/$range)*1000)/10),1).'</option>';
+        $options .= '>'.number_format((intval(($value/$range)*1000)/10),1)."% duty</option>";
     }
     return $options;
 }

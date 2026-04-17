@@ -1,5 +1,9 @@
 Menu="SystemInformation"
 Icon="heartbeat"
 Title="IPMI"
-Type="xmenu"
-Tabs="true"
+Markdown="false"
+---
+<?php
+$q = isset($_SERVER['QUERY_STRING']) ? (string) $_SERVER['QUERY_STRING'] : '';
+header('Location: /Settings/IPMI'.($q !== '' ? '?'.$q : ''), true, 302);
+exit;

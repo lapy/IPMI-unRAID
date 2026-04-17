@@ -52,19 +52,88 @@ function ipmiSubmitToolDownload(tool) {
   document.body.removeChild(form);
 }
 
-function ipmiQuickNavInit() {
-  $(document).on('click', 'a[data-ipmi-tools-tab]', function() {
-    var tab = $(this).data('ipmi-tools-tab');
-    if (tab && typeof $.cookie === 'function')
-      $.cookie('one', tab, { expires: null, path: '/' });
+/**
+ * Find top-level emhttp tab controls for the current page (Unraid 7+ `role="tab"`
+ * buttons, or legacy `.tabs` radio rows). Match is applied to trimmed label text.
+ */
+function ipmiFindMainTabControls(labelMatch) {
+  labelMatch = labelMatch || /.*/;
+  var $modern = $('.tabs-container button[role="tab"]').filter(function() {
+    return labelMatch.test((($(this).text() || '').trim()).toLowerCase());
+  });
+  if ($modern.length)
+    return $modern;
+  return $('.tabs .tab input[type="radio"][id^="tab"]').filter(function() {
+    var t = ($('label[for="' + this.id + '"]').text() || '').trim().toLowerCase();
+    return labelMatch.test(t);
+  });
+}
+
+function ipmiToggleMainTabControls(labelMatch, visible) {
+  ipmiFindMainTabControls(labelMatch).each(function() {
+    var $n = $(this);
+    if ($n.is('button'))
+      $n.toggle(visible);
+    else
+      $n.closest('.tab').toggle(visible);
+  });
+}
+
+function ipmiOnMainTabClick(labelMatch, handler) {
+  ipmiFindMainTabControls(labelMatch).on('click', handler);
+}
+
+/**
+ * Mirror a hidden enable/disable <select> (values "enable" / "disable") with Unraid's
+ * jquery.switchButton so existing form posts and .change() handlers keep working.
+ */
+function ipmiWireEnableSelectToggle(checkboxSelector, selectSelector, switchOptions) {
+  if (typeof window.jQuery === 'undefined')
+    return;
+  var $ = window.jQuery;
+  if (typeof $.fn.switchButton !== 'function')
+    return;
+
+  var $cb = $(checkboxSelector);
+  var $sel = $(selectSelector);
+  if (!$cb.length || !$sel.length)
+    return;
+
+  var opts = $.extend({
+    labels_placement: 'left',
+    on_label: 'Yes',
+    off_label: 'No',
+    checked: $sel.val() === 'enable'
+  }, switchOptions || {});
+
+  $cb.switchButton(opts);
+
+  var lock = false;
+
+  $cb.off('change.ipmiEnableToggle').on('change.ipmiEnableToggle', function() {
+    if (lock)
+      return;
+    lock = true;
+    var next = $cb[0].checked ? 'enable' : 'disable';
+    if ($sel.val() !== next)
+      $sel.val(next).trigger('change');
+    lock = false;
   });
 
-  $(document).on('click', 'a[data-ipmi-settings-tab]', function() {
-    var tab = $(this).data('ipmi-settings-tab');
-    if (tab && typeof $.cookie === 'function')
-      $.cookie('one', tab, { expires: null, path: '/' });
+  $sel.off('change.ipmiEnableToggle').on('change.ipmiEnableToggle', function() {
+    if (lock)
+      return;
+    var on = $sel.val() === 'enable';
+    if (!!$cb[0].checked === on)
+      return;
+    lock = true;
+    $cb[0].checked = on;
+    $cb.trigger('change');
+    lock = false;
   });
+}
 
+function ipmiBindGlobalControls() {
   $(document).on('click', '#ipmi-diag-export', function(e) {
     e.preventDefault();
     ipmiSubmitToolDownload('diag_download');
@@ -140,10 +209,10 @@ function ipmiPost(path, payload, onSuccess, onError, options) {
     });
 }
 
-(function bindQuickNavWhenReady() {
+(function bindIpmiGlobalWhenReady() {
   function run() {
     if (typeof window.jQuery !== 'undefined')
-      window.jQuery(ipmiQuickNavInit);
+      window.jQuery(ipmiBindGlobalControls);
   }
 
   if (document.readyState === 'loading')

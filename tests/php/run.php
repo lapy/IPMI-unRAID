@@ -48,6 +48,10 @@ assert_true(ipmi_array_get($dmi[0], 'Product Name', '') === 'ROMED8U-2T', 'DMI p
 $notes = ipmi_release_normalize_notes("First item\n- Second item\n");
 assert_true($notes === ['First item', 'Second item'], 'Release notes should normalize plain and bulleted lines.');
 assert_true(ipmi_release_render_entry('2026.04.17', $notes) === "###2026.04.17\n- First item\n- Second item", 'Release entry rendering should use changelog format.');
+assert_true(
+    ipmi_release_render_entry('2026.04.17', ['Start & stop <daemon>']) === "###2026.04.17\n- Start &amp; stop &lt;daemon&gt;",
+    'Release entry rendering should XML-escape generated notes.'
+);
 
 $manifest_fixture = <<<PLG
 <?xml version='1.0' standalone='yes'?>

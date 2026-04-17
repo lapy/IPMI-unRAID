@@ -1028,7 +1028,7 @@
 - move to system information section
 - remove columns
 - fix waiting for events triggering notifications
-- update version and change log, add start & stop of daemon
+- update version and change log, add start &amp; stop of daemon
 - update version, add remove cron
 - version and permissions for script
 - update version info

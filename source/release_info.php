@@ -19,7 +19,7 @@ function ipmi_release_normalize_notes($raw_notes) {
 function ipmi_release_render_entry($version, $notes) {
     $entry = "###{$version}\n";
     foreach ($notes as $note)
-        $entry .= '- '.$note."\n";
+        $entry .= '- '.htmlspecialchars($note, ENT_XML1 | ENT_NOQUOTES, 'UTF-8')."\n";
 
     return rtrim($entry, "\n");
 }
